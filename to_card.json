@@ -1,0 +1,23 @@
+{
+    "mainIcon": {
+        "icon": "cardpan_transfer"
+    },
+    "statusIcon": {
+        "iconUrl": "https://cdn.lifetechx.ru/icons/banks/icon_square/vtb_square.png",
+        "icon": "statusicon_unknownbank"
+    },
+    "transactionDateTime": "2026-05-08T17:12:04+0000",
+    "operationName": "На карту 2966",
+    "operationType": "D_BYPAN_TRANSFER",
+    "mainAmount": {
+        "amount": 10000,
+        "currency": "810",
+        "direction": "OUTGOING"
+    },
+    "detailAction": {
+        "transactionId": "M69949783738",
+        "productType": "CARD",
+        "source": "RBS",
+        "productId": "13856641038"
+    }
+}

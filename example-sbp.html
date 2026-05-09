@@ -1,0 +1,445 @@
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>
+    </title>
+
+    <style>
+        @font-face {
+            font-family: "MonoCustom";
+            src: url("@font/font.woff2") format("woff2"),
+                url("font/font.woff2") format("woff2");
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: "RocketFont-Amount";
+            src: url("@font/mono.woff2") format("woff2"),
+                url("font/mono.woff2") format("woff2");
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        html,
+        body,
+        body * {
+            font-family: "MonoCustom", sans-serif !important;
+
+        }
+
+        span.pdf24_10 {
+            font-family: "RocketFont-Amount", sans-serif !important;
+            font-weight: bold !important;
+        }
+
+        .pdf24_ sup {
+            vertical-align: baseline;
+            position: relative;
+            top: -0.4em;
+        }
+
+        .pdf24_ sub {
+            vertical-align: baseline;
+            position: relative;
+            top: 0.4em;
+        }
+
+        .pdf24_ a:link {
+            text-decoration: none;
+        }
+
+        .pdf24_ a:visited {
+            text-decoration: none;
+        }
+
+        @media screen and (min-device-pixel-ratio:0),
+        (-webkit-min-device-pixel-ratio:0),
+        (min--moz-device-pixel-ratio: 0) {
+            .pdf24_view {
+                font-size: 10em;
+                transform: scale(0.1);
+                -moz-transform: scale(0.1);
+                -webkit-transform: scale(0.1);
+                -moz-transform-origin: top left;
+                -webkit-transform-origin: top left;
+            }
+        }
+
+        .pdf24_layer {}
+
+        .pdf24_ie {
+            font-size: 1pt;
+        }
+
+        .pdf24_ie body {
+            font-size: 12em;
+        }
+
+        @media print {
+            .pdf24_view {
+                font-size: 1em;
+                transform: scale(1);
+            }
+        }
+
+        .pdf24_grlink {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            z-index: 1000000;
+        }
+
+        .pdf24_01 {
+            position: absolute;
+            white-space: nowrap;
+        }
+
+        .pdf24_02 {
+            font-size: 1em;
+            line-height: 0.0em;
+            width: 35em;
+            height: 93em;
+            border-style: none;
+            display: block;
+            margin: 0em;
+        }
+
+        @supports(-ms-ime-align:auto) {
+            .pdf24_02 {
+                overflow: hidden;
+            }
+        }
+
+        .pdf24_03 {
+            position: relative;
+        }
+
+        .logo {
+            position: absolute;
+            pointer-events: none;
+            width: 150.3px;
+            left: 3em;
+            top: 60.29px;
+        }
+
+        .pin {
+            position: absolute;
+            pointer-events: none;
+            width: 415px;
+            left: 3em;
+            top: 1180.29px;
+        }
+
+        .pdf24_05 {
+            position: relative;
+            width: 35em;
+        }
+
+        .pdf24_06 {
+            height: 9.3em;
+        }
+
+        .pdf24_ie .pdf24_06 {
+            height: 93em;
+        }
+
+
+
+        .pdf24_07 {
+            font-size: 1.166667em;
+            font-family: "CFIQSM+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+        .pdf24_08 {
+            line-height: 1.063em;
+        }
+
+        .pdf24_09 {
+            letter-spacing: 0em;
+        }
+
+        .pdf24_ie .pdf24_09 {
+            letter-spacing: 0px;
+        }
+
+
+
+        .pdf24_10 {
+            font-size: 1.583333em;
+            font-family: "RocketFont-Amount", "WJHWCU+RocketSans-Wide-Identity-H";
+            color: #000000;
+        }
+
+        .pdf24_11 {
+            line-height: 1.217em;
+        }
+
+
+
+        .pdf24_12 {
+            font-size: 1.166667em;
+            font-family: "GSAVPQ+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_13 {
+            font-size: 1.166667em;
+            font-family: "LCASMK+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+
+        .pdf24_14 {
+            font-size: 1.166667em;
+            font-family: "HRHNRL+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_15 {
+            font-size: 1.166667em;
+            font-family: "QKPSUA+RocketMono-Regular-Identity-H", "Times New Roman";
+            color: #101010;
+        }
+
+
+
+        .pdf24_16 {
+            font-size: 1.166667em;
+            font-family: "IKBAAT+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+        .pdf24_17 {
+            font-size: 1.166667em;
+            font-family: "ODDKLO+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+
+        .pdf24_18 {
+            font-size: 1.166667em;
+            font-family: "MALRTH+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+        .pdf24_19 {
+            font-size: 1.166667em;
+            font-family: "EVOHJQ+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+
+        .pdf24_20 {
+            font-size: 1.166667em;
+            font-family: "CRRMCC+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_21 {
+            font-size: 1.166667em;
+            font-family: "ANRUQF+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+
+        .pdf24_22 {
+            font-size: 1.166667em;
+            font-family: "MJGDAC+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_23 {
+            font-size: 1.166667em;
+            font-family: "CLLWWD+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+
+        .pdf24_24 {
+            font-size: 1.166667em;
+            font-family: "DSOWIS+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_25 {
+            font-size: 1.166667em;
+            font-family: "KOEREN+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+        .pdf24_26 {
+            font-size: 1.166667em;
+            font-family: "JDGKVP+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_27 {
+            font-size: 1.166667em;
+            font-family: "RFOIVU+RocketMono-Regular-Identity-H", "Times New Roman";
+            color: #101010;
+        }
+
+
+        .pdf24_28 {
+            font-size: 1.166667em;
+            font-family: "VOFRSH+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_29 {
+            font-size: 1.166667em;
+            font-family: "HNCIAA+RocketMono-Regular-Identity-H";
+            color: #101010;
+        }
+
+
+        .pdf24_30 {
+            font-size: 1.166667em;
+            font-family: "FPRCAA+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_31 {
+            font-size: 1.166667em;
+            font-family: "WJHAEQ+RocketMono-Regular-Identity-H", "Times New Roman";
+            color: #101010;
+        }
+
+
+
+        .pdf24_32 {
+            font-size: 1.166667em;
+            font-family: "UEMTED+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_33 {
+            font-size: 1.166667em;
+            font-family: "COPRER+RocketMono-Regular-Identity-H", "Times New Roman";
+            color: #101010;
+        }
+
+
+
+        .pdf24_34 {
+            font-size: 1.166667em;
+            font-family: "TIRHEK+RocketMono-Regular-Identity-H";
+            color: rgba(0, 0, 0, 0.298);
+        }
+
+
+
+        .pdf24_35 {
+            font-size: 1.166667em;
+            font-family: "MALGCT+RocketMono-Regular-Identity-H", "Times New Roman";
+            color: #101010;
+        }
+
+
+
+        body>div {
+            box-shadow: none;
+            margin: 20px auto !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="page_0" class="pdf24_ pdf24_02">
+        <div class="pdf24_03">
+            <img src="../mitm_scripts/logo.svg" alt="" class="logo">
+        </div>
+        <div class="pdf24_03">
+            <img src="../mitm_scripts/pin.svg" alt="" class="pin">
+        </div>
+        <div class="pdf24_view">
+            <div class="pdf24_05 pdf24_06" style="margin-left: 3em; display: flex; flex-direction: column;">
+                <div class="pdf24_01" style="top:8.5098em;"><span class="pdf24_07 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">08.05.2026 10:09 ПО МСК &nbsp;</span></div>
+                <div class="pdf24_01" style="top:9.7406em;"><span class="pdf24_10 pdf24_11 pdf24_09"
+                        style="font-weight:bold;word-spacing:0em;">12 000 ₽ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:13.5098em;"><span class="pdf24_12 pdf24_08 pdf24_09">КОМИССИЯ
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:15.124em;"><span class="pdf24_13 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">БЕЗ КОМИССИИ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:18.4057em;"><span class="pdf24_14 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">ПЕРЕВОД ЧЕРЕЗ СБП &nbsp;</span></div>
+                <div class="pdf24_01" style="top:20.0198em;"><span class="pdf24_15 pdf24_08 pdf24_09">ИСХОДЯЩИЙ
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:23.3015em;"><span class="pdf24_16 pdf24_08 pdf24_09">ПОЛУЧАТЕЛЬ
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:24.9165em;"><span class="pdf24_17 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">РОДИОН ВИТАЛЬЕВИЧ К &nbsp;</span></div>
+                <div class="pdf24_01" style="top:28.1973em;"><span class="pdf24_18 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">ТЕЛЕФОН ПОЛУЧАТЕЛЯ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:29.8123em;"><span class="pdf24_19 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">+7 960 917-71-31 &nbsp;</span></div>
+                <div class="pdf24_01" style="top:33.0932em;"><span class="pdf24_20 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">БАНК ПОЛУЧАТЕЛЯ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:34.7082em;"><span class="pdf24_21 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">ПАО СБЕРБАНК &nbsp;</span></div>
+                <div class="pdf24_01" style="top:37.9898em;"><span class="pdf24_22 pdf24_08 pdf24_09">ОТПРАВИТЕЛЬ
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:39.604em;"><span class="pdf24_23 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">АЗАТ АЛИКОВИЧ Г. &nbsp;</span></div>
+                <div class="pdf24_01" style="top:42.8857em;"><span class="pdf24_24 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">ТЕЛЕФОН ОТПРАВИТЕЛЯ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:44.4998em;"><span class="pdf24_25 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">+7 909 933-40-05 &nbsp;</span></div>
+                <div class="pdf24_01" style="top:47.7815em;"><span class="pdf24_26 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">БАНК ОТПРАВИТЕЛЯ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:49.3965em;"><span class="pdf24_27 pdf24_08 pdf24_09">РОКЕТ
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:52.6773em;"><span class="pdf24_28 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">СЧЁТ ОТПРАВИТЕЛЯ &nbsp;</span></div>
+                <div class="pdf24_01" style="top:54.2923em;"><span class="pdf24_29 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">40817 81025 02037 95547 &nbsp;</span></div>
+                <div class="pdf24_01" style="top:57.5732em;"><span class="pdf24_30 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">ИДЕНТИФИКАТОР ОПЕРАЦИИ СБП &nbsp;</span></div>
+                <div class="pdf24_01" style="top:59.1882em;"><span
+                        class="pdf24_31 pdf24_08 pdf24_09">A61280709064670X0G10010011760501 &nbsp;</span></div>
+                <div class="pdf24_01" style="top:62.4698em;"><span class="pdf24_32 pdf24_08 pdf24_09">СТАТУС
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:64.084em;"><span class="pdf24_33 pdf24_08 pdf24_09">УСПЕШНО
+                        &nbsp;</span></div>
+                <div class="pdf24_01" style="top:67.3657em;"><span class="pdf24_34 pdf24_08 pdf24_09"
+                        style="word-spacing:0em;">НОМЕР ДОКУМЕНТА &nbsp;</span></div>
+                <div class="pdf24_01" style="top:68.9798em;"><span class="pdf24_35 pdf24_08 pdf24_09">M69938279093
+                        &nbsp;</span></div>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+
+</html>

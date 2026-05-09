@@ -1,0 +1,83 @@
+{
+    "mainIcon": {
+        "iconCode": "cardpan_transfer"
+    },
+    "operationName": "На карту 2966",
+    "repeatableInfo": {
+        "operationId": "69949783738",
+        "repeatableType": "CARD",
+        "repeatable": true
+    },
+    "returnableInfo": {
+        "isReturnable": false
+    },
+    "mainAmount": {
+        "amount": 10000,
+        "currencySymbol": "₽",
+        "direction": "OUTGOING"
+    },
+    "operationStatus": {
+        "status": "ENTRIED"
+    },
+    "operationFields": [
+        {
+            "title": "Статус платежа",
+            "value": "Выполнена",
+            "icon": {
+                "iconCode": "statusicon_done"
+            },
+            "key": "operationStatus"
+        },
+        {
+            "title": "Дата и время",
+            "value": "09 мая, 00:12",
+            "key": "operationTime"
+        },
+        {
+            "title": "Категория",
+            "value": "Переводы",
+            "key": "category",
+            "isChangeAvailable": true
+        },
+        {
+            "title": "Счёт списания",
+            "value": "Мой счёт",
+            "key": "sourceProductName"
+        },
+        {
+            "title": "Банк получателя",
+            "value": "Банк ВТБ",
+            "icon": {
+                "iconUrl": "https://cdn.lifetechx.ru/icons/banks/icon_square/vtb_square.png",
+                "iconCode": "statusicon_unknownbank"
+            },
+            "key": "bankName"
+        }
+    ],
+    "balance": {
+        "before": {
+            "amount": 131739.4,
+            "currencySymbol": "₽"
+        },
+        "after": {
+            "amount": 121739.4,
+            "currencySymbol": "₽"
+        },
+        "separator": "→"
+    },
+    "cheque": {
+        "allowed": true,
+        "productType": "CARD",
+        "productId": "13856641038",
+        "transactionId": "M69949783738"
+    },
+    "categoryChange": {
+        "categoryCode": "CAT_TRANSFERS",
+        "operationId": "69949783738"
+    },
+    "template": {
+        "isAllowed": true,
+        "originalOperationUuid": "c5cc9cf1-0f9b-4ae1-b9fa-498c6b80d49e",
+        "operationType": "CARD"
+    }
+}

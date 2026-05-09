@@ -1,0 +1,24 @@
+{
+    "mainIcon": {
+        "icon": "mcc_prihod",
+        "iconLiter": "И"
+    },
+    "statusIcon": {
+        "iconUrl": "https://cdn.lifetechx.ru/icons/banks/icon_square/sberbank_square.png",
+        "icon": "statusicon_unknownbank"
+    },
+    "transactionDateTime": "2026-05-08T14:51:03+0000",
+    "operationName": "Ильсур Г.",
+    "operationType": "C_BYPHONE_SBP_TRANSFER",
+    "mainAmount": {
+        "amount": 30000,
+        "currency": "810",
+        "direction": "OUTGOING"
+    },
+    "detailAction": {
+        "transactionId": "M69947658350",
+        "productType": "CARD",
+        "source": "RBS",
+        "productId": "13856641038"
+    }
+}

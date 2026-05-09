@@ -1,0 +1,107 @@
+{
+    "mainIcon": {
+        "iconLiter": "А",
+        "iconCode": "mcc_rashod"
+    },
+    "operationName": "Азат Аликович Г",
+    "repeatableInfo": {
+        "operationId": "69943705894",
+        "repeatableType": "PHONE",
+        "repeatable": true
+    },
+    "returnableInfo": {
+        "isReturnable": false
+    },
+    "mainAmount": {
+        "amount": 15000,
+        "currencySymbol": "₽",
+        "direction": "OUTGOING"
+    },
+    "operationStatus": {
+        "status": "ENTRIED"
+    },
+    "operationFields": [
+        {
+            "title": "Комиссия",
+            "value": "Нет",
+            "key": "fee"
+        },
+        {
+            "title": "Статус платежа",
+            "value": "Выполнена",
+            "icon": {
+                "iconCode": "statusicon_done"
+            },
+            "key": "operationStatus"
+        },
+        {
+            "title": "Дата и время",
+            "value": "08 мая, 18:29",
+            "key": "operationTime"
+        },
+        {
+            "title": "Категория",
+            "value": "Переводы",
+            "key": "category",
+            "isChangeAvailable": true
+        },
+        {
+            "title": "Счёт списания",
+            "value": "Мой счёт",
+            "key": "sourceProductName"
+        },
+        {
+            "title": "Перевод по номеру телефона",
+            "value": "Через СБП",
+            "icon": {
+                "iconCode": "sbp"
+            },
+            "key": "phoneTransferMethod"
+        },
+        {
+            "title": "Номер телефона получателя",
+            "value": "+7 909 933-40-05",
+            "key": "phoneNumber"
+        },
+        {
+            "title": "Банк получателя",
+            "value": "АО \"ТБАНК\"",
+            "icon": {
+                "iconUrl": "https://cdn.lifetechx.ru/icons/banks/icon_square/tbank_square.png",
+                "iconCode": "statusicon_unknownbank"
+            },
+            "key": "bankName"
+        },
+        {
+            "title": "Номер операции в СБП",
+            "value": "B6128112922901280G10180011760501",
+            "key": "sbpOperationId"
+        }
+    ],
+    "balance": {
+        "before": {
+            "amount": 112956.4,
+            "currencySymbol": "₽"
+        },
+        "after": {
+            "amount": 97956.4,
+            "currencySymbol": "₽"
+        },
+        "separator": "→"
+    },
+    "cheque": {
+        "allowed": true,
+        "productType": "CARD",
+        "productId": "13856641038",
+        "transactionId": "M69943705894"
+    },
+    "categoryChange": {
+        "categoryCode": "CAT_TRANSFERS",
+        "operationId": "69943705894"
+    },
+    "template": {
+        "isAllowed": true,
+        "originalOperationUuid": "9e6fe5d8-1f8c-450e-aa59-5a3a04bfd6e0",
+        "operationType": "PHONE"
+    }
+}
