@@ -59,6 +59,7 @@ const OUT_PATH = process.argv[3] || HTML_PATH.replace(/\.html$/, '_generated.pdf
     process.exit(1);
   }
   console.log('читаю:', path.basename(HTML_PATH));
+  console.log('pdf scale:', SAFE_PDF_SCALE);
 
   let browser;
   try {
@@ -106,8 +107,8 @@ const OUT_PATH = process.argv[3] || HTML_PATH.replace(/\.html$/, '_generated.pdf
     await page.pdf({
       path: OUT_PATH,
       printBackground: true,
-      width: dims ? Math.ceil(dims.w * SAFE_PDF_SCALE) + 'px' : '560px',
-      height: dims ? Math.ceil(dims.h * SAFE_PDF_SCALE) + 'px' : '1488px',
+      width: dims ? dims.w + 'px' : '560px',
+      height: dims ? dims.h + 'px' : '1488px',
       scale: SAFE_PDF_SCALE,
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
     });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
-import shutil
+import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,6 +40,8 @@ HISTORY_SOURCE_BY_TYPE = {
     "SBP": "M69947658350",
     "CARD": "M69949783738",
 }
+PREBUILT_DIR = OUTPUT_DIR / "prebuilt"
+_PDF_CACHE: dict[int, tuple[str, bytes]] = {}
 
 
 def _payment_seed(payment: dict[str, object], index: int) -> str:
@@ -47,6 +49,12 @@ def _payment_seed(payment: dict[str, object], index: int) -> str:
     if index > 0:
         seed = f"{seed}|{index}"
     return seed
+
+
+def _payment_cache_key(payment: dict[str, object], index: int) -> str:
+    payload = json.dumps(payment, ensure_ascii=False, sort_keys=True)
+    scale = str(os.environ.get("PDF_SCALE", "1.10"))
+    return hashlib.sha256(f"{index}|{payload}|{scale}".encode("utf-8")).hexdigest()
 
 
 def _default_payment_context() -> tuple[dict[str, object], int]:
@@ -378,26 +386,15 @@ def _html_to_pdf(html_path: Path, pdf_path: Path, gen_pdf_js: Path | None = None
     return False
 
 
-def _clear_saved_cheques_dir() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    for child in OUTPUT_DIR.iterdir():
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink()
-
-
-def _build_pdf_for_flow(payment: dict[str, object], index: int) -> bytes | None:
-    _clear_saved_cheques_dir()
-
-    base_name = "rocket-reciept"
-
+def _build_pdf_for_payment(payment: dict[str, object], index: int) -> bytes | None:
+    PREBUILT_DIR.mkdir(parents=True, exist_ok=True)
+    base_name = f"rocket-reciept-{index}"
     html = build_cheque_html(payment, index)
     if html is None:
         return None
 
-    html_path = OUTPUT_DIR / f"{base_name}.html"
-    pdf_path = OUTPUT_DIR / f"{base_name}.pdf"
+    html_path = PREBUILT_DIR / f"{base_name}.html"
+    pdf_path = PREBUILT_DIR / f"{base_name}.pdf"
     html_path.write_text(html, encoding="utf-8")
     app_logger.info(SCOPE, "html built for cheque", html_file=html_path.name)
 
@@ -407,6 +404,41 @@ def _build_pdf_for_flow(payment: dict[str, object], index: int) -> bytes | None:
     generated = pdf_path.read_bytes()
     app_logger.info(SCOPE, "pdf generated", pdf_file=pdf_path.name, size=len(generated))
     return generated
+
+
+def _get_or_build_cached_pdf(payment: dict[str, object], index: int) -> bytes | None:
+    key = _payment_cache_key(payment, index)
+    cached = _PDF_CACHE.get(index)
+    if cached and cached[0] == key:
+        app_logger.info(SCOPE, "using prebuilt pdf cache", payment_index=index, bytes=len(cached[1]))
+        return cached[1]
+    if cached and cached[0] != key:
+        app_logger.info(SCOPE, "cache miss: payment data changed", payment_index=index)
+    generated = _build_pdf_for_payment(payment, index)
+    if generated is None:
+        return None
+    _PDF_CACHE[index] = (key, generated)
+    return generated
+
+
+def prewarm_pdf_cache() -> None:
+    store = get_store()
+    payments = list(store["payments"])
+    app_logger.info(SCOPE, "prewarming pdf cache", payments=len(payments))
+    built = 0
+    for idx, payment in enumerate(payments):
+        key = _payment_cache_key(payment, idx)
+        generated = _build_pdf_for_payment(payment, idx)
+        if generated is None:
+            app_logger.warning(SCOPE, "failed to prewarm payment pdf", payment_index=idx)
+            continue
+        _PDF_CACHE[idx] = (key, generated)
+        built += 1
+    app_logger.info(SCOPE, "prewarm complete", built=built, total=len(payments))
+
+
+# Подготовить PDF заранее при старте аддона, чтобы выдача чека была мгновенной.
+prewarm_pdf_cache()
 
 
 def request(flow: http.HTTPFlow) -> None:
@@ -449,7 +481,7 @@ def response(flow: http.HTTPFlow) -> None:
     if status == 200:
         app_logger.warning(SCOPE, "upstream returned 200 but body is not usable pdf")
 
-    generated = _build_pdf_for_flow(payment, index)
+    generated = _get_or_build_cached_pdf(payment, index)
     if generated is None:
         app_logger.warning(
             SCOPE,
