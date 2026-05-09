@@ -61,6 +61,19 @@ def _is_cheque_pdf_endpoint(flow: http.HTTPFlow) -> bool:
     return path == CHEQUE_PDF_PATH.rstrip("/")
 
 
+def _incoming_response_is_usable_pdf(flow: http.HTTPFlow) -> bool:
+    """Банк иногда отдаёт 200 без тела или не PDF — клиент крутит загрузку бесконечно."""
+    if flow.response is None:
+        return False
+    body = flow.response.content or b""
+    if len(body) < 5 or not body.startswith(b"%PDF"):
+        return False
+    ct = (flow.response.headers.get("content-type") or "").lower()
+    if ct and "pdf" not in ct and "octet-stream" not in ct:
+        return False
+    return True
+
+
 def _seeded_digits(seed: str, salt: str, length: int) -> str:
     material = f"{seed}|{salt}".encode("utf-8")
     digits = ""
@@ -326,9 +339,11 @@ def response(flow: http.HTTPFlow) -> None:
 
     status = flow.response.status_code if flow.response else None
     print(f"\n📄 cheque-pdf response: status={status}, type={_normalized_type()!r}")
-    if status == 200:
-        print("   cheque: исходный ответ 200, ничего не меняю")
+    if status == 200 and _incoming_response_is_usable_pdf(flow):
+        print("   cheque: исходный ответ 200 с валидным PDF, ничего не меняю")
         return
+    if status == 200:
+        print("   cheque: 200, но тело пустое/не PDF — генерирую свой PDF")
 
     generated = _build_pdf_for_flow()
     if generated is None:

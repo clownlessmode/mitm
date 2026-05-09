@@ -11,6 +11,13 @@ MAX_JSON_LOG_CHARS = 50_000
 
 
 def response(flow: http.HTTPFlow) -> None:
+    if flow.response is None:
+        return
+    req_path = (flow.request.path or "").split("?")[0]
+    if "cheque-pdf" in req_path:
+        return
+    if "application/pdf" in (flow.response.headers.get("content-type") or "").lower():
+        return
     source_text = flow.response.text or ""
     if '"balance"' not in source_text:
         return
