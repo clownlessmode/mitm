@@ -31,6 +31,23 @@ function loadPlaywright() {
 
 const { chromium } = loadPlaywright();
 
+function resolveChromiumExecutable() {
+  const candidates = [
+    process.env.CHROMIUM_PATH || '',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch (_) {
+      /* continue */
+    }
+  }
+  return '';
+}
+
 const HTML_PATH = process.argv[2] || path.resolve(__dirname, 'saved_cheques', 'example.html');
 const OUT_PATH = process.argv[3] || HTML_PATH.replace(/\.html$/, '_generated.pdf');
 
@@ -43,7 +60,18 @@ const OUT_PATH = process.argv[3] || HTML_PATH.replace(/\.html$/, '_generated.pdf
 
   let browser;
   try {
-    browser = await chromium.launch();
+    const systemChromium = resolveChromiumExecutable();
+    const launchOptions = {};
+    if (systemChromium) {
+      launchOptions.executablePath = systemChromium;
+      // Для VPS/контейнеров root-сценарий обычно требует no-sandbox.
+      launchOptions.args = ['--no-sandbox', '--disable-setuid-sandbox'];
+      console.log('использую system chromium:', systemChromium);
+    } else {
+      console.log('использую bundled playwright chromium');
+    }
+
+    browser = await chromium.launch(launchOptions);
     const context = await browser.newContext({
       viewport: { width: 600, height: 900 },
     });
