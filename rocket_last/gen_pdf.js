@@ -85,6 +85,20 @@ const OUT_PATH = process.argv[3] || HTML_PATH.replace(/\.html$/, '_generated.pdf
 
     await page.evaluate(() => document.fonts.ready);
 
+    // Принудительно масштабируем весь документ целиком.
+    if (SAFE_PDF_SCALE !== 1) {
+      await page.evaluate((scale) => {
+        const htmlEl = document.documentElement;
+        const bodyEl = document.body;
+        if (!htmlEl || !bodyEl) return;
+        htmlEl.style.transformOrigin = 'top left';
+        htmlEl.style.transform = `scale(${scale})`;
+        htmlEl.style.width = `${100 / scale}%`;
+        htmlEl.style.height = `${100 / scale}%`;
+        bodyEl.style.margin = '0';
+      }, SAFE_PDF_SCALE);
+    }
+
     const dims = await page.evaluate(() => {
       const el = document.querySelector('.pdf24_02');
       if (!el) return null;
