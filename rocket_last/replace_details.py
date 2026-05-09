@@ -5,19 +5,9 @@ from typing import Any
 
 from mitmproxy import http
 
+import app_logger
 from bank_mapper import get_bank_meta
-from config import (
-    bank,
-    details_new_payment_name,
-    history_new_payment_amount,
-    history_new_payment_name,
-    last_balance,
-    sbp_telephone,
-    transaction_date,
-    transaction_time,
-    transaction_tz_suffix,
-    type as payment_type,
-)
+from runtime_config import get_active_profile, normalize_type, normalize_tz_suffix
 
 HOST_SUB = "dbo.rocketbank.ru"
 DETAILS_PATH = "/v1/history/transaction"
@@ -27,13 +17,12 @@ TEMPLATE_BY_TYPE = {
     "SPB": "details_sbp.json",  # поддержка частой опечатки
     "CARD": "details_card.json",
 }
+SCOPE = "replace_details"
 
 
 def _normalized_type() -> str:
-    normalized = str(payment_type).strip().upper()
-    if normalized == "SPB":
-        return "SBP"
-    return normalized
+    profile = get_active_profile()
+    return normalize_type(profile["data"]["type"])
 
 
 def _is_target_request(flow: http.HTTPFlow) -> bool:
@@ -87,13 +76,15 @@ def _build_seeded_id(source_id: str, seed: str, digits_count: int) -> str:
 
 
 def _expected_transaction_id(template: dict[str, Any]) -> str:
+    profile = get_active_profile()
+    pdata = profile["data"]
     cheque = template.get("cheque")
     source_tid = ""
     if isinstance(cheque, dict):
         source_tid = str(cheque.get("transactionId") or "")
     return _build_seeded_id(
         source_id=source_tid,
-        seed=history_new_payment_name,
+        seed=pdata["history_new_payment_name"],
         digits_count=11,
     )
 
@@ -113,8 +104,10 @@ def _format_operation_time() -> str:
         "11": "ноября",
         "12": "декабря",
     }
-    date_raw = str(transaction_date).strip()
-    time_raw = str(transaction_time).strip()
+    profile = get_active_profile()
+    pdata = profile["data"]
+    date_raw = str(pdata["transaction_date"]).strip()
+    time_raw = str(pdata["transaction_time"]).strip()
     try:
         yyyy, mm, dd = date_raw.split("-")
         hh, mi, _ss = time_raw.split(":")
@@ -125,11 +118,13 @@ def _format_operation_time() -> str:
 
 
 def _patch_operation_fields(template: dict[str, Any], tx_type: str) -> None:
+    profile = get_active_profile()
+    pdata = profile["data"]
     fields = template.get("operationFields")
     if not isinstance(fields, list):
         return
 
-    bank_meta = get_bank_meta(bank)
+    bank_meta = get_bank_meta(pdata["bank"])
     formatted_time = _format_operation_time()
     for item in fields:
         if not isinstance(item, dict):
@@ -142,31 +137,34 @@ def _patch_operation_fields(template: dict[str, Any], tx_type: str) -> None:
             icon = _set_if_dict(item, "icon")
             icon["iconUrl"] = bank_meta["icon_url"]
         if tx_type == "SBP" and key == "phoneNumber":
-            item["value"] = str(sbp_telephone).strip()
+            item["value"] = str(pdata["sbp_telephone"]).strip()
         if tx_type == "SBP" and key == "sbpOperationId":
             source_sbp_id = str(item.get("value") or "")
             item["value"] = _build_seeded_id(
                 source_id=source_sbp_id,
-                seed=history_new_payment_name,
+                seed=pdata["history_new_payment_name"],
                 digits_count=31,
             )
 
 
 def _patch_template(template: dict[str, Any]) -> None:
+    profile = get_active_profile()
+    pdata = profile["data"]
     tx_type = _normalized_type()
 
     if tx_type == "SBP":
-        operation_name = str(details_new_payment_name).strip()
+        operation_name = str(pdata["details_new_payment_name"]).strip()
     else:
-        operation_name = f"На карту {str(history_new_payment_name).strip()}".strip()
+        operation_name = f"На карту {str(pdata['history_new_payment_name']).strip()}".strip()
 
-    amount = history_new_payment_amount
-    before_amount = last_balance + history_new_payment_amount
-    after_amount = last_balance
+    amount = int(pdata["history_new_payment_amount"])
+    before_amount = int(pdata["last_balance"]) + int(pdata["history_new_payment_amount"])
+    after_amount = int(pdata["last_balance"])
 
     template["operationName"] = operation_name
     template["transactionDateTime"] = (
-        f"{str(transaction_date).strip()}T{str(transaction_time).strip()}{transaction_tz_suffix()}"
+        f"{str(pdata['transaction_date']).strip()}T"
+        f"{str(pdata['transaction_time']).strip()}{normalize_tz_suffix(pdata['transaction_time_zone'])}"
     )
     generated_tid = _expected_transaction_id(template)
 
@@ -175,7 +173,7 @@ def _patch_template(template: dict[str, Any]) -> None:
 
     if tx_type == "SBP":
         main_icon = _set_if_dict(template, "mainIcon")
-        payer_name = str(history_new_payment_name).strip()
+        payer_name = str(pdata["history_new_payment_name"]).strip()
         main_icon["iconLiter"] = payer_name[:1].upper() if payer_name else ""
 
     balance = _set_if_dict(template, "balance")
@@ -206,9 +204,13 @@ def response(flow: http.HTTPFlow) -> None:
     flow.response.status_code = 200
     flow.response.text = json.dumps(template, ensure_ascii=False, separators=(",", ":"))
 
-    print(f"\n📍 route: {flow.request.method} {flow.request.pretty_url}")
-    print(f"📍 host={flow.request.host!r} path={flow.request.path!r}")
-    print("\n🔁 Детали операции подменены по transactionId:")
-    print(f"  transactionId -> {expected_tid!r}")
-    print(f"  template_type -> {_normalized_type()!r}")
-    print("✅ Ответ изменён\n")
+    profile = get_active_profile()
+    app_logger.info(
+        SCOPE,
+        "details response replaced",
+        method=flow.request.method,
+        path=flow.request.path,
+        transaction_id=expected_tid,
+        template_type=_normalized_type(),
+        active_profile=profile["id"],
+    )

@@ -9,19 +9,9 @@ from zoneinfo import ZoneInfo
 
 from mitmproxy import http
 
+import app_logger
 from bank_mapper import get_bank_meta
-from config import (
-    bank,
-    card_number,
-    details_new_payment_name,
-    history_new_payment_amount,
-    history_new_payment_name,
-    sbp_telephone,
-    transaction_date,
-    transaction_time,
-    transaction_tz_suffix,
-    type as payment_type,
-)
+from runtime_config import get_active_profile, normalize_tz_suffix, normalize_type
 
 HOST_SUB = "dbo.rocketbank.ru"
 CHEQUE_PDF_PATH = "/v1/reports/cheque-pdf"
@@ -45,13 +35,12 @@ TMPL_BANK = "ПАО СБЕРБАНК"
 TMPL_SBP_ID = "A61280709064670X0G10010011760501"
 TMPL_CARD_NUMBER = "2200 **** **** 2966"
 TMPL_DOC_NUMBER = "M69938279093"
+SCOPE = "replace_cheque"
 
 
 def _normalized_type() -> str:
-    normalized = str(payment_type).strip().upper()
-    if normalized == "SPB":
-        return "SBP"
-    return normalized
+    profile = get_active_profile()
+    return normalize_type(profile["data"]["type"])
 
 
 def _is_cheque_pdf_endpoint(flow: http.HTTPFlow) -> bool:
@@ -94,18 +83,22 @@ def _build_seeded_id(source_id: str, seed: str, digits_count: int) -> str:
 
 
 def _transaction_id() -> str:
+    profile = get_active_profile()
+    pdata = profile["data"]
     source = "M69949783738" if _normalized_type() == "CARD" else "M69943705894"
     return _build_seeded_id(
         source_id=source,
-        seed=history_new_payment_name,
+        seed=pdata["history_new_payment_name"],
         digits_count=11,
     )
 
 
 def _sbp_operation_id() -> str:
+    profile = get_active_profile()
+    pdata = profile["data"]
     return _build_seeded_id(
         source_id="B6128112922901280G10180011760501",
-        seed=history_new_payment_name,
+        seed=pdata["history_new_payment_name"],
         digits_count=31,
     )
 
@@ -135,11 +128,13 @@ def _suffix_to_tzinfo(suffix: str) -> timezone:
 
 def _format_cheque_datetime() -> str:
     """На чеке всегда московские часы; дата и время переводятся из зоны конфига в МСК."""
-    date_raw = str(transaction_date).strip()
-    time_raw = str(transaction_time).strip()
+    profile = get_active_profile()
+    pdata = profile["data"]
+    date_raw = str(pdata["transaction_date"]).strip()
+    time_raw = str(pdata["transaction_time"]).strip()
     if not date_raw or not time_raw:
         return f"{date_raw} {time_raw} ПО МСК".strip()
-    tzinfo = _suffix_to_tzinfo(transaction_tz_suffix())
+    tzinfo = _suffix_to_tzinfo(normalize_tz_suffix(pdata["transaction_time_zone"]))
     parsed: datetime | None = None
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
@@ -157,7 +152,8 @@ def _format_cheque_datetime() -> str:
 
 
 def _card_number() -> str:
-    return str(card_number).strip() or TMPL_CARD_NUMBER
+    profile = get_active_profile()
+    return str(profile["data"]["card_number"]).strip() or TMPL_CARD_NUMBER
 
 
 def _inject_font_overrides(html: str) -> str:
@@ -201,7 +197,7 @@ def _embed_svg_assets(html: str) -> str:
     for name in ("logo.svg", "pin.svg"):
         path = PROJECT_DIR / name
         if not path.exists():
-            print(f"   cheque: SVG не найден: {path}")
+            app_logger.warning(SCOPE, "svg asset missing", asset=str(path))
             continue
         data_uri = "data:image/svg+xml;base64," + base64.b64encode(path.read_bytes()).decode()
         html = html.replace(f'src="../mitm_scripts/{name}"', f'src="{data_uri}"')
@@ -216,29 +212,31 @@ def _template_path() -> Path | None:
 
 
 def build_cheque_html() -> str | None:
+    profile = get_active_profile()
+    pdata = profile["data"]
     template_path = _template_path()
     if template_path is None:
-        print(f"   cheque: неизвестный type={payment_type!r}, нужен SBP/SPB или CARD")
+        app_logger.warning(SCOPE, "unknown payment type", payment_type=pdata["type"])
         return None
     if not template_path.exists():
-        print(f"   cheque: шаблон не найден: {template_path}")
+        app_logger.error(SCOPE, "template missing", template_path=str(template_path))
         return None
 
     tx_type = _normalized_type()
     html = template_path.read_text(encoding="utf-8")
-    bank_name = get_bank_meta(bank)["name"]
+    bank_name = get_bank_meta(pdata["bank"])["name"]
 
     replacements = {
         TMPL_DATE: _format_cheque_datetime(),
-        TMPL_AMOUNT: _format_amount(history_new_payment_amount),
+        TMPL_AMOUNT: _format_amount(pdata["history_new_payment_amount"]),
         TMPL_BANK: bank_name,
         TMPL_DOC_NUMBER: _transaction_id(),
     }
     if tx_type == "SBP":
         replacements.update(
             {
-                TMPL_SBP_RECIPIENT: str(details_new_payment_name).strip().upper(),
-                TMPL_SBP_PHONE: str(sbp_telephone).strip(),
+                TMPL_SBP_RECIPIENT: str(pdata["details_new_payment_name"]).strip().upper(),
+                TMPL_SBP_PHONE: str(pdata["sbp_telephone"]).strip(),
                 TMPL_SBP_ID: _sbp_operation_id(),
             }
         )
@@ -268,7 +266,7 @@ def _resolve_gen_pdf_js() -> Path | None:
 def _html_to_pdf(html_path: Path, pdf_path: Path, gen_pdf_js: Path | None = None) -> bool:
     gen_js = gen_pdf_js or _resolve_gen_pdf_js()
     if gen_js is None:
-        print("   cheque: gen_pdf.js не найден")
+        app_logger.error(SCOPE, "gen_pdf.js not found")
         return False
     try:
         result = subprocess.run(
@@ -279,16 +277,21 @@ def _html_to_pdf(html_path: Path, pdf_path: Path, gen_pdf_js: Path | None = None
         )
         if result.returncode != 0:
             err = result.stderr.decode(errors="replace")
-            print(f"   gen_pdf.js failed (code {result.returncode}): {err[:300]}")
+            app_logger.error(
+                SCOPE,
+                "gen_pdf.js failed",
+                return_code=result.returncode,
+                stderr=err[:300],
+            )
             return False
         if not pdf_path.exists():
-            print("   gen_pdf.js: выходной файл не создан")
+            app_logger.error(SCOPE, "gen_pdf.js did not create output file")
             return False
         return True
     except subprocess.TimeoutExpired:
-        print("   gen_pdf.js: таймаут (>30 с)")
+        app_logger.error(SCOPE, "gen_pdf.js timeout", timeout_sec=30)
     except Exception as exc:
-        print(f"   gen_pdf.js: ошибка запуска: {exc}")
+        app_logger.error(SCOPE, "gen_pdf.js launch error", error=str(exc))
     return False
 
 
@@ -313,13 +316,13 @@ def _build_pdf_for_flow() -> bytes | None:
     html_path = OUTPUT_DIR / f"{base_name}.html"
     pdf_path = OUTPUT_DIR / f"{base_name}.pdf"
     html_path.write_text(html, encoding="utf-8")
-    print(f"   html: {html_path.name}")
+    app_logger.info(SCOPE, "html built for cheque", html_file=html_path.name)
 
     if not _html_to_pdf(html_path, pdf_path):
         return None
 
     generated = pdf_path.read_bytes()
-    print(f"   pdf:  {pdf_path.name} ({len(generated)} B)")
+    app_logger.info(SCOPE, "pdf generated", pdf_file=pdf_path.name, size=len(generated))
     return generated
 
 
@@ -328,7 +331,13 @@ def request(flow: http.HTTPFlow) -> None:
         return
     if flow.request.method.upper() != "POST":
         return
-    print(f"\n📄 cheque-pdf POST: {len(flow.request.content or b'')} B")
+    app_logger.info(
+        SCOPE,
+        "cheque request captured",
+        method=flow.request.method,
+        path=flow.request.path,
+        content_bytes=len(flow.request.content or b""),
+    )
 
 
 def response(flow: http.HTTPFlow) -> None:
@@ -338,16 +347,23 @@ def response(flow: http.HTTPFlow) -> None:
         return
 
     status = flow.response.status_code if flow.response else None
-    print(f"\n📄 cheque-pdf response: status={status}, type={_normalized_type()!r}")
+    profile = get_active_profile()
+    app_logger.info(
+        SCOPE,
+        "cheque response intercepted",
+        status=status,
+        payment_type=_normalized_type(),
+        active_profile=profile["id"],
+    )
     if status == 200 and _incoming_response_is_usable_pdf(flow):
-        print("   cheque: исходный ответ 200 с валидным PDF, ничего не меняю")
+        app_logger.info(SCOPE, "upstream pdf is valid, no replacement")
         return
     if status == 200:
-        print("   cheque: 200, но тело пустое/не PDF — генерирую свой PDF")
+        app_logger.warning(SCOPE, "upstream returned 200 but body is not usable pdf")
 
     generated = _build_pdf_for_flow()
     if generated is None:
-        print("   cheque: PDF не сгенерирован, оставляю исходный ответ")
+        app_logger.warning(SCOPE, "failed to generate replacement pdf, passthrough enabled")
         return
 
     flow.response.status_code = 200
@@ -357,4 +373,9 @@ def response(flow: http.HTTPFlow) -> None:
     flow.response.headers["content-type"] = "application/pdf"
     flow.response.headers["content-length"] = str(len(generated))
     flow.response.headers["cache-control"] = "no-store"
-    print(f"   ✅ ответ подменён на 200 PDF ({_transaction_id()})")
+    app_logger.info(
+        SCOPE,
+        "response replaced with generated pdf",
+        transaction_id=_transaction_id(),
+        bytes=len(generated),
+    )

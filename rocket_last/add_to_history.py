@@ -6,26 +6,18 @@ from typing import Any
 
 from mitmproxy import http
 
-from config import (
-    bank,
-    history_new_payment_amount,
-    history_new_payment_name,
-    transaction_date,
-    transaction_time,
-    transaction_tz_suffix,
-    type as payment_type,
-)
+import app_logger
 from bank_mapper import get_bank_meta
+from runtime_config import get_active_profile, get_profile_payments, normalize_type, normalize_tz_suffix
 
 HOST_SUB = "dbo.rocketbank.ru"
 HISTORY_PATH = "/v1/history/list"
-MAX_JSON_LOG_CHARS = 50_000
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_BY_TYPE = {
     "SBP": "to_sbp.json",
-    "SPB": "to_sbp.json",  # поддержка частой опечатки
     "CARD": "to_card.json",
 }
+SCOPE = "add_to_history"
 
 
 def _is_history_list(flow: http.HTTPFlow) -> bool:
@@ -59,32 +51,25 @@ def _now_iso_utc() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+0000")
 
 
-def _normalized_type() -> str:
-    normalized = str(payment_type).strip().upper()
-    if normalized == "SPB":
-        return "SBP"
-    return normalized
-
-
-def _datetime_from_config() -> str:
+def _datetime_for_payment(payment: dict[str, Any]) -> str:
     # Формируем время операции строго из конфига.
-    date_part = str(transaction_date).strip()
-    time_part = str(transaction_time).strip()
+    date_part = str(payment["transaction_date"]).strip()
+    time_part = str(payment["transaction_time"]).strip()
     if date_part and time_part:
-        return f"{date_part}T{time_part}{transaction_tz_suffix()}"
+        return f"{date_part}T{time_part}{normalize_tz_suffix(payment['transaction_time_zone'])}"
     return _now_iso_utc()
 
 
-def _build_operation_name() -> str:
-    custom_name = str(history_new_payment_name).strip()
-    tx_type = _normalized_type()
+def _build_operation_name(payment: dict[str, Any]) -> str:
+    custom_name = str(payment["history_new_payment_name"]).strip()
+    tx_type = normalize_type(payment["type"])
     if tx_type == "CARD":
         return f"На карту {custom_name}".strip()
     return custom_name
 
 
-def _build_icon_liter() -> str:
-    name = str(history_new_payment_name).strip()
+def _build_icon_liter(payment: dict[str, Any]) -> str:
+    name = str(payment["history_new_payment_name"]).strip()
     if not name:
         return ""
     return name[:1].upper()
@@ -98,9 +83,8 @@ def _set_if_dict(target: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
-def _load_template() -> dict[str, Any] | None:
-    normalized_type = _normalized_type()
-    template_name = TEMPLATE_BY_TYPE.get(normalized_type)
+def _load_template(tx_type: str) -> dict[str, Any] | None:
+    template_name = TEMPLATE_BY_TYPE.get(normalize_type(tx_type))
     if template_name is None:
         return None
 
@@ -115,9 +99,42 @@ def _load_template() -> dict[str, Any] | None:
     return template_data
 
 
-def _append_payment(data: Any) -> dict[str, Any] | None:
-    if not isinstance(data, list) or not data:
+def _build_operation(payment: dict[str, Any], index: int) -> dict[str, Any] | None:
+    tx_type = normalize_type(payment["type"])
+    new_op = _load_template(tx_type)
+    if new_op is None:
         return None
+
+    new_op["transactionDateTime"] = _datetime_for_payment(payment)
+    new_op["operationName"] = _build_operation_name(payment)
+
+    main_amount = _set_if_dict(new_op, "mainAmount")
+    main_amount["amount"] = int(payment["history_new_payment_amount"])
+
+    if tx_type == "SBP":
+        main_icon = _set_if_dict(new_op, "mainIcon")
+        main_icon["iconLiter"] = _build_icon_liter(payment)
+
+    bank_meta = get_bank_meta(payment["bank"])
+    status_icon = _set_if_dict(new_op, "statusIcon")
+    status_icon["iconUrl"] = bank_meta["icon_url"]
+
+    detail_action = _set_if_dict(new_op, "detailAction")
+    source_tid = str(detail_action.get("transactionId") or "")
+    seed = str(payment["history_new_payment_name"])
+    if index > 0:
+        seed = f"{seed}|{index}"
+    detail_action["transactionId"] = _build_seeded_id(
+        source_id=source_tid,
+        seed=seed,
+        digits_count=11,
+    )
+    return new_op
+
+
+def _append_payments(data: Any) -> list[dict[str, Any]]:
+    if not isinstance(data, list) or not data:
+        return []
 
     ops: list[Any] | None = None
     for block in data:
@@ -129,38 +146,21 @@ def _append_payment(data: Any) -> dict[str, Any] | None:
             break
 
     if ops is None:
-        return None
-
-    new_op = _load_template()
-    if new_op is None:
-        return None
-
-    # Обновляем время операции по значениям из конфига.
-    new_op["transactionDateTime"] = _datetime_from_config()
-    new_op["operationName"] = _build_operation_name()
-
-    main_amount = _set_if_dict(new_op, "mainAmount")
-    main_amount["amount"] = history_new_payment_amount
-
-    if _normalized_type() == "SBP":
-        main_icon = _set_if_dict(new_op, "mainIcon")
-        main_icon["iconLiter"] = _build_icon_liter()
-
-    bank_meta = get_bank_meta(bank)
-    status_icon = _set_if_dict(new_op, "statusIcon")
-    status_icon["iconUrl"] = bank_meta["icon_url"]
-
-    detail_action = _set_if_dict(new_op, "detailAction")
-    source_tid = str(detail_action.get("transactionId") or "")
-    detail_action["transactionId"] = _build_seeded_id(
-        source_id=source_tid,
-        seed=history_new_payment_name,
-        digits_count=11,
-    )
-
-    # Вставляем наверх списка, чтобы операция была первой в истории.
-    ops.insert(0, new_op)
-    return new_op
+        return []
+    profile = get_active_profile()
+    pdata = profile["data"]
+    payments = get_profile_payments(pdata)
+    created: list[dict[str, Any]] = []
+    # Чтобы в истории был порядок как в UI (1,2,3), вставляем в обратном.
+    for idx in range(len(payments) - 1, -1, -1):
+        payment = payments[idx]
+        new_op = _build_operation(payment, index=idx)
+        if new_op is None:
+            continue
+        ops.insert(0, new_op)
+        created.append(new_op)
+    created.reverse()
+    return created
 
 
 def response(flow: http.HTTPFlow) -> None:
@@ -177,27 +177,24 @@ def response(flow: http.HTTPFlow) -> None:
     except json.JSONDecodeError:
         return
 
-    new_op = _append_payment(data)
-    if new_op is None:
+    created_ops = _append_payments(data)
+    if not created_ops:
         return
 
     flow.response.text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
-    tid = new_op.get("detailAction", {}).get("transactionId")
-    print(f"\n📍 route: {flow.request.method} {flow.request.pretty_url}")
-    print(f"📍 host={flow.request.host!r} path={flow.request.path!r}")
-    print("\n➕ В историю добавлен новый платеж (первым):")
-    print(f"  transactionId -> {tid!r}")
-    print(f"  operationName -> {new_op.get('operationName')!r}")
-    print(f"  mainAmount.amount -> {new_op.get('mainAmount', {}).get('amount')!r}")
-    print(f"  operationType -> {payment_type!r}")
-    print(f"  bank -> {get_bank_meta(bank)['name']!r}")
-
-    body_for_log = flow.response.text
-    if len(body_for_log) > MAX_JSON_LOG_CHARS:
-        body_for_log = (
-            body_for_log[:MAX_JSON_LOG_CHARS]
-            + f"\n… [обрезано, всего {len(flow.response.text)} символов]\n"
-        )
-    print(f"\n📄 response body:\n{body_for_log}\n")
-    print("✅ Ответ изменён\n")
+    profile = get_active_profile()
+    pdata = profile["data"]
+    first_tid = created_ops[0].get("detailAction", {}).get("transactionId")
+    last_tid = created_ops[-1].get("detailAction", {}).get("transactionId")
+    app_logger.info(
+        SCOPE,
+        "history operations inserted",
+        method=flow.request.method,
+        path=flow.request.path,
+        count=len(created_ops),
+        first_transaction_id=first_tid,
+        last_transaction_id=last_tid,
+        operation_type=pdata["type"],
+        active_profile=profile["id"],
+    )
