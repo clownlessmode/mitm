@@ -57,6 +57,7 @@ def _default_payment_context() -> tuple[dict[str, object], int]:
 def _resolve_payment_context(flow: http.HTTPFlow) -> tuple[dict[str, object], int]:
     req_tid = _extract_tid_from_body(flow.request.content or b"")
     if not req_tid:
+        app_logger.warning(SCOPE, "request transactionId missing; fallback to first payment")
         return _default_payment_context()
     store = get_store()
     for idx, payment in enumerate(store["payments"]):
@@ -70,7 +71,19 @@ def _resolve_payment_context(flow: http.HTTPFlow) -> tuple[dict[str, object], in
             digits_count=11,
         )
         if expected_tid == req_tid:
+            app_logger.info(
+                SCOPE,
+                "payment context matched by transactionId",
+                req_tid=req_tid,
+                payment_index=idx,
+                payment_name=payment["history_new_payment_name"],
+            )
             return payment, idx
+    app_logger.warning(
+        SCOPE,
+        "request transactionId not found in payments; fallback to first payment",
+        req_tid=req_tid,
+    )
     return _default_payment_context()
 
 
@@ -80,6 +93,7 @@ def _extract_tid_from_body(raw: bytes) -> str:
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
     except json.JSONDecodeError:
+        app_logger.warning(SCOPE, "request body is not valid json for transactionId lookup")
         return ""
 
     def _walk(node: object) -> str:
@@ -100,6 +114,17 @@ def _extract_tid_from_body(raw: bytes) -> str:
     return _walk(payload)
 
 
+def _response_meta(flow: http.HTTPFlow) -> dict[str, object]:
+    if flow.response is None:
+        return {"status": None, "content_type": "", "content_length": 0}
+    body = flow.response.content or b""
+    return {
+        "status": flow.response.status_code,
+        "content_type": flow.response.headers.get("content-type", ""),
+        "content_length": len(body),
+    }
+
+
 def _is_cheque_pdf_endpoint(flow: http.HTTPFlow) -> bool:
     if HOST_SUB not in (flow.request.host or ""):
         return False
@@ -113,9 +138,16 @@ def _incoming_response_is_usable_pdf(flow: http.HTTPFlow) -> bool:
         return False
     body = flow.response.content or b""
     if len(body) < 5 or not body.startswith(b"%PDF"):
+        app_logger.warning(
+            SCOPE,
+            "upstream body is not pdf signature",
+            body_prefix=body[:16],
+            content_length=len(body),
+        )
         return False
     ct = (flow.response.headers.get("content-type") or "").lower()
     if ct and "pdf" not in ct and "octet-stream" not in ct:
+        app_logger.warning(SCOPE, "upstream content-type is not pdf", content_type=ct)
         return False
     return True
 
@@ -316,6 +348,7 @@ def _html_to_pdf(html_path: Path, pdf_path: Path, gen_pdf_js: Path | None = None
     if gen_js is None:
         app_logger.error(SCOPE, "gen_pdf.js not found")
         return False
+    app_logger.info(SCOPE, "running pdf generator", script=str(gen_js), html=str(html_path), pdf=str(pdf_path))
     try:
         result = subprocess.run(
             ["node", str(gen_js), str(html_path), str(pdf_path)],
@@ -325,11 +358,13 @@ def _html_to_pdf(html_path: Path, pdf_path: Path, gen_pdf_js: Path | None = None
         )
         if result.returncode != 0:
             err = result.stderr.decode(errors="replace")
+            out = result.stdout.decode(errors="replace")
             app_logger.error(
                 SCOPE,
                 "gen_pdf.js failed",
                 return_code=result.returncode,
                 stderr=err[:300],
+                stdout=out[:200],
             )
             return False
         if not pdf_path.exists():
@@ -385,6 +420,7 @@ def request(flow: http.HTTPFlow) -> None:
         method=flow.request.method,
         path=flow.request.path,
         content_bytes=len(flow.request.content or b""),
+        query=flow.request.query,
     )
 
 
@@ -394,12 +430,15 @@ def response(flow: http.HTTPFlow) -> None:
     if flow.request.method.upper() != "POST":
         return
 
-    status = flow.response.status_code if flow.response else None
+    meta = _response_meta(flow)
+    status = meta["status"]
     payment, index = _resolve_payment_context(flow)
     app_logger.info(
         SCOPE,
         "cheque response intercepted",
         status=status,
+        content_type=meta["content_type"],
+        content_length=meta["content_length"],
         payment_type=payment["type"],
         payment_name=payment["history_new_payment_name"],
         payment_index=index,
@@ -412,7 +451,13 @@ def response(flow: http.HTTPFlow) -> None:
 
     generated = _build_pdf_for_flow(payment, index)
     if generated is None:
-        app_logger.warning(SCOPE, "failed to generate replacement pdf, passthrough enabled")
+        app_logger.warning(
+            SCOPE,
+            "failed to generate replacement pdf, passthrough enabled",
+            upstream_status=status,
+            upstream_content_type=meta["content_type"],
+            upstream_content_length=meta["content_length"],
+        )
         return
 
     flow.response.status_code = 200
