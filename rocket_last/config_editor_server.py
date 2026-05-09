@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import html
+import hmac
 import os
+import secrets
 import subprocess
 import sys
 import urllib.parse
@@ -93,12 +95,6 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
 
     note_class = "err" if is_error else "ok"
     note_html = f'<p class="note {note_class}">{esc(message)}</p>' if message else ""
-    token_field = (
-        '<div class="token field"><label>Токен</label><input type="password" name="token" autocomplete="off"/></div>'
-        if token_enabled
-        else ""
-    )
-
     list_html_parts: list[str] = []
     for idx, payment in enumerate(payments):
         active_cls = " active" if idx == edit_index else ""
@@ -164,7 +160,6 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
             <label for="last_balance">Баланс после всех платежей</label>
             <input id="last_balance" name="last_balance" type="number" value="{last_balance}"/>
           </div>
-          {token_field}
           <div class="footer-actions">
             <button class="btn btn-main" type="submit">Сохранить баланс</button>
           </div>
@@ -175,11 +170,11 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
           <div class="grid">
             {"".join(fields_html)}
           </div>
-          {token_field}
           <div class="footer-actions">
             <button class="btn btn-main" type="submit">Сохранить карточку + перезапуск mitm</button>
           </div>
         </form>
+        {"<form method='post' action='/logout' style='margin-top:10px'><button class='btn btn-soft' type='submit'>Выйти</button></form>" if token_enabled else ""}
         <p class="small">
           Хранение: <code>rocket_last/payments.json</code>. После любого изменения данные
           синхронизируются в <code>rocket_last/config.py</code> и сервис перезапускается.
@@ -194,14 +189,72 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
 class Handler(BaseHTTPRequestHandler):
     token: str | None = None
     unit: str = "mitm-rocket"
+    sessions: set[str] = set()
 
     def log_message(self, fmt: str, *args) -> None:
         sys.stderr.write("%s - - [%s] %s\n" % (self.address_string(), self.log_date_time_string(), fmt % args))
 
-    def _token_valid(self, form: dict[str, list[str]]) -> bool:
+    def _token_required(self) -> bool:
+        return bool(self.token)
+
+    def _token_valid(self, provided: str) -> bool:
         if self.token is None:
             return True
-        return _first(form, "token") == self.token
+        return hmac.compare_digest(provided, self.token)
+
+    def _current_session(self) -> str:
+        cookie = self.headers.get("Cookie", "")
+        parts = [part.strip() for part in cookie.split(";")]
+        for part in parts:
+            if part.startswith("admin_session="):
+                return part.split("=", 1)[1].strip()
+        return ""
+
+    def _is_authenticated(self) -> bool:
+        if not self._token_required():
+            return True
+        sid = self._current_session()
+        return bool(sid and sid in self.sessions)
+
+    def _login_page(self, message: str = "") -> str:
+        note = f'<p class="note err">{html.escape(message)}</p>' if message else ""
+        return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>rocket_last admin login</title>
+  <style>{STYLE}</style>
+</head>
+<body>
+  <main class="content" style="max-width:540px;margin:40px auto;">
+    <div class="card">
+      <h1 style="margin-top:0">Вход в админку</h1>
+      {note}
+      <form method="post" action="/login">
+        <div class="field">
+          <label for="token">Токен</label>
+          <input id="token" name="token" type="password" autocomplete="off" autofocus/>
+        </div>
+        <div class="footer-actions">
+          <button class="btn btn-main" type="submit">Войти</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</body>
+</html>"""
+
+    def _respond_login(self, message: str = "", status_code: int = 200) -> None:
+        self.send_response(status_code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(self._login_page(message).encode("utf-8"))
+
+    def _redirect(self, location: str) -> None:
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.end_headers()
 
     def _respond(self, edit_index: int = -1, message: str = "", is_error: bool = False) -> None:
         store = runtime_config.ensure_store()
@@ -214,7 +267,7 @@ class Handler(BaseHTTPRequestHandler):
                 edit_index=edit_index,
                 message=message,
                 is_error=is_error,
-                token_enabled=self.token is not None,
+                token_enabled=self._token_required(),
             ).encode("utf-8")
         )
 
@@ -274,9 +327,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path in ("/login", "/login/"):
+            if self._is_authenticated():
+                self._redirect("/")
+                return
+            self._respond_login()
+            return
+
         if parsed.path not in ("/", ""):
             self.send_error(404)
             return
+
+        if not self._is_authenticated():
+            self._redirect("/login")
+            return
+
         query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
         edit = _first(query, "edit", "-1").strip()
         try:
@@ -286,15 +351,43 @@ class Handler(BaseHTTPRequestHandler):
         self._respond(edit_index=edit_index)
 
     def do_POST(self) -> None:
+        if self.path == "/login":
+            if not self._token_required():
+                self._redirect("/")
+                return
+            form = _parse_form(self)
+            provided = _first(form, "token")
+            if not self._token_valid(provided):
+                self._respond_login("Неверный токен.", status_code=403)
+                return
+            sid = secrets.token_urlsafe(32)
+            self.sessions.add(sid)
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.send_header("Set-Cookie", f"admin_session={sid}; HttpOnly; SameSite=Lax; Max-Age=2592000; Path=/")
+            self.end_headers()
+            return
+
+        if self.path == "/logout":
+            sid = self._current_session()
+            if sid and sid in self.sessions:
+                self.sessions.remove(sid)
+            self.send_response(303)
+            self.send_header("Location", "/login")
+            self.send_header("Set-Cookie", "admin_session=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/")
+            self.end_headers()
+            return
+
         if self.path not in ("/settings/save", "/payment/save", "/payment/delete"):
             self.send_error(404)
             return
-        form = _parse_form(self)
-        if not self._token_valid(form):
-            self._respond(message="Неверный токен.", is_error=True)
+
+        if not self._is_authenticated():
+            self._redirect("/login")
             return
 
         try:
+            form = _parse_form(self)
             if self.path == "/settings/save":
                 ok, msg = self._save_settings(form)
                 self._respond(message=msg, is_error=not ok)
