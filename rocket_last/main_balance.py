@@ -3,7 +3,7 @@ import re
 from mitmproxy import http
 
 import app_logger
-from runtime_config import get_active_profile
+from runtime_config import get_store
 
 # Только пара ключ–значение в JSON: "balance": <число> (запятая после числа не трогаем)
 NUM = r"-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
@@ -25,8 +25,8 @@ def response(flow: http.HTTPFlow) -> None:
     if '"balance"' not in source_text:
         return
 
-    profile = get_active_profile()
-    balance_value = int(profile["data"]["last_balance"])
+    store = get_store()
+    balance_value = int(store["last_balance"])
     changes: list[tuple[str, str]] = []
 
     def replace_match(m: re.Match) -> str:
@@ -46,6 +46,5 @@ def response(flow: http.HTTPFlow) -> None:
         method=flow.request.method,
         path=flow.request.path,
         replacements=len(changes),
-        active_profile=profile["id"],
         balance=balance_value,
     )

@@ -7,22 +7,20 @@ from mitmproxy import http
 
 import app_logger
 from bank_mapper import get_bank_meta
-from runtime_config import get_active_profile, normalize_type, normalize_tz_suffix
+from runtime_config import get_store, normalize_type, normalize_tz_suffix
 
 HOST_SUB = "dbo.rocketbank.ru"
 DETAILS_PATH = "/v1/history/transaction"
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_BY_TYPE = {
     "SBP": "details_sbp.json",
-    "SPB": "details_sbp.json",  # поддержка частой опечатки
     "CARD": "details_card.json",
 }
+HISTORY_SOURCE_BY_TYPE = {
+    "SBP": "M69947658350",
+    "CARD": "M69949783738",
+}
 SCOPE = "replace_details"
-
-
-def _normalized_type() -> str:
-    profile = get_active_profile()
-    return normalize_type(profile["data"]["type"])
 
 
 def _is_target_request(flow: http.HTTPFlow) -> bool:
@@ -34,8 +32,8 @@ def _is_target_request(flow: http.HTTPFlow) -> bool:
     return path == DETAILS_PATH.rstrip("/")
 
 
-def _load_template() -> dict | None:
-    template_name = TEMPLATE_BY_TYPE.get(_normalized_type())
+def _load_template(payment_type: str) -> dict | None:
+    template_name = TEMPLATE_BY_TYPE.get(normalize_type(payment_type))
     if template_name is None:
         return None
     template_path = PROJECT_DIR / template_name
@@ -75,21 +73,35 @@ def _build_seeded_id(source_id: str, seed: str, digits_count: int) -> str:
     return f"{prefix}{numeric}"
 
 
-def _expected_transaction_id(template: dict[str, Any]) -> str:
-    profile = get_active_profile()
-    pdata = profile["data"]
-    cheque = template.get("cheque")
-    source_tid = ""
-    if isinstance(cheque, dict):
-        source_tid = str(cheque.get("transactionId") or "")
+def _expected_transaction_id(seed: str, source_tid: str) -> str:
     return _build_seeded_id(
         source_id=source_tid,
-        seed=pdata["history_new_payment_name"],
+        seed=seed,
         digits_count=11,
     )
 
 
-def _format_operation_time() -> str:
+def _payment_seed(payment: dict[str, Any], index: int) -> str:
+    seed = str(payment["history_new_payment_name"])
+    if index > 0:
+        seed = f"{seed}|{index}"
+    return seed
+
+
+def _find_payment_by_tid(req_tid: str) -> tuple[dict[str, Any], int] | None:
+    store = get_store()
+    for idx, payment in enumerate(store["payments"]):
+        tx_type = normalize_type(payment["type"])
+        source_tid = HISTORY_SOURCE_BY_TYPE.get(tx_type)
+        if not source_tid:
+            continue
+        expected = _expected_transaction_id(_payment_seed(payment, idx), source_tid)
+        if req_tid == expected:
+            return payment, idx
+    return None
+
+
+def _format_operation_time(payment: dict[str, Any]) -> str:
     months = {
         "01": "января",
         "02": "февраля",
@@ -104,10 +116,8 @@ def _format_operation_time() -> str:
         "11": "ноября",
         "12": "декабря",
     }
-    profile = get_active_profile()
-    pdata = profile["data"]
-    date_raw = str(pdata["transaction_date"]).strip()
-    time_raw = str(pdata["transaction_time"]).strip()
+    date_raw = str(payment["transaction_date"]).strip()
+    time_raw = str(payment["transaction_time"]).strip()
     try:
         yyyy, mm, dd = date_raw.split("-")
         hh, mi, _ss = time_raw.split(":")
@@ -117,15 +127,13 @@ def _format_operation_time() -> str:
     return f"{int(dd)} {month}, {hh}:{mi}"
 
 
-def _patch_operation_fields(template: dict[str, Any], tx_type: str) -> None:
-    profile = get_active_profile()
-    pdata = profile["data"]
+def _patch_operation_fields(template: dict[str, Any], tx_type: str, payment: dict[str, Any], index: int) -> None:
     fields = template.get("operationFields")
     if not isinstance(fields, list):
         return
 
-    bank_meta = get_bank_meta(pdata["bank"])
-    formatted_time = _format_operation_time()
+    bank_meta = get_bank_meta(payment["bank"])
+    formatted_time = _format_operation_time(payment)
     for item in fields:
         if not isinstance(item, dict):
             continue
@@ -137,43 +145,42 @@ def _patch_operation_fields(template: dict[str, Any], tx_type: str) -> None:
             icon = _set_if_dict(item, "icon")
             icon["iconUrl"] = bank_meta["icon_url"]
         if tx_type == "SBP" and key == "phoneNumber":
-            item["value"] = str(pdata["sbp_telephone"]).strip()
+            item["value"] = str(payment["sbp_telephone"]).strip()
         if tx_type == "SBP" and key == "sbpOperationId":
             source_sbp_id = str(item.get("value") or "")
             item["value"] = _build_seeded_id(
                 source_id=source_sbp_id,
-                seed=pdata["history_new_payment_name"],
+                seed=_payment_seed(payment, index),
                 digits_count=31,
             )
 
 
-def _patch_template(template: dict[str, Any]) -> None:
-    profile = get_active_profile()
-    pdata = profile["data"]
-    tx_type = _normalized_type()
+def _patch_template(template: dict[str, Any], payment: dict[str, Any], index: int, req_tid: str) -> None:
+    store = get_store()
+    tx_type = normalize_type(payment["type"])
 
     if tx_type == "SBP":
-        operation_name = str(pdata["details_new_payment_name"]).strip()
+        operation_name = str(payment["details_new_payment_name"]).strip()
     else:
-        operation_name = f"На карту {str(pdata['history_new_payment_name']).strip()}".strip()
+        operation_name = f"На карту {str(payment['history_new_payment_name']).strip()}".strip()
 
-    amount = int(pdata["history_new_payment_amount"])
-    before_amount = int(pdata["last_balance"]) + int(pdata["history_new_payment_amount"])
-    after_amount = int(pdata["last_balance"])
+    amount = int(payment["history_new_payment_amount"])
+    before_amount = int(store["last_balance"]) + int(payment["history_new_payment_amount"])
+    after_amount = int(store["last_balance"])
 
     template["operationName"] = operation_name
     template["transactionDateTime"] = (
-        f"{str(pdata['transaction_date']).strip()}T"
-        f"{str(pdata['transaction_time']).strip()}{normalize_tz_suffix(pdata['transaction_time_zone'])}"
+        f"{str(payment['transaction_date']).strip()}T"
+        f"{str(payment['transaction_time']).strip()}{normalize_tz_suffix(payment['transaction_time_zone'])}"
     )
-    generated_tid = _expected_transaction_id(template)
+    generated_tid = req_tid
 
     main_amount = _set_if_dict(template, "mainAmount")
     main_amount["amount"] = amount
 
     if tx_type == "SBP":
         main_icon = _set_if_dict(template, "mainIcon")
-        payer_name = str(pdata["history_new_payment_name"]).strip()
+        payer_name = str(payment["history_new_payment_name"]).strip()
         main_icon["iconLiter"] = payer_name[:1].upper() if payer_name else ""
 
     balance = _set_if_dict(template, "balance")
@@ -185,7 +192,7 @@ def _patch_template(template: dict[str, Any]) -> None:
     cheque = _set_if_dict(template, "cheque")
     cheque["transactionId"] = generated_tid
 
-    _patch_operation_fields(template, tx_type)
+    _patch_operation_fields(template, tx_type, payment, index)
 
 
 def response(flow: http.HTTPFlow) -> None:
@@ -193,24 +200,25 @@ def response(flow: http.HTTPFlow) -> None:
         return
 
     req_tid = (flow.request.query.get("transactionId") or "").strip()
-    template = _load_template()
+    selected = _find_payment_by_tid(req_tid)
+    if selected is None:
+        return
+    payment, index = selected
+    template = _load_template(payment["type"])
     if template is None:
         return
-    expected_tid = _expected_transaction_id(template)
-    if not expected_tid or req_tid != expected_tid:
-        return
 
-    _patch_template(template)
+    _patch_template(template, payment, index, req_tid)
     flow.response.status_code = 200
     flow.response.text = json.dumps(template, ensure_ascii=False, separators=(",", ":"))
 
-    profile = get_active_profile()
     app_logger.info(
         SCOPE,
         "details response replaced",
         method=flow.request.method,
         path=flow.request.path,
-        transaction_id=expected_tid,
-        template_type=_normalized_type(),
-        active_profile=profile["id"],
+        transaction_id=req_tid,
+        template_type=normalize_type(payment["type"]),
+        payment_name=payment["history_new_payment_name"],
+        payment_index=index,
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import hashlib
 import shutil
 import subprocess
@@ -11,7 +12,7 @@ from mitmproxy import http
 
 import app_logger
 from bank_mapper import get_bank_meta
-from runtime_config import get_active_profile, normalize_tz_suffix, normalize_type
+from runtime_config import get_store, normalize_tz_suffix, normalize_type
 
 HOST_SUB = "dbo.rocketbank.ru"
 CHEQUE_PDF_PATH = "/v1/reports/cheque-pdf"
@@ -23,7 +24,6 @@ FONT_DIR = SCRIPT_DIR / "font"
 
 TEMPLATE_BY_TYPE = {
     "SBP": PROJECT_DIR / "example-sbp.html",
-    "SPB": PROJECT_DIR / "example-sbp.html",
     "CARD": PROJECT_DIR / "example-card.html",
 }
 
@@ -36,11 +36,68 @@ TMPL_SBP_ID = "A61280709064670X0G10010011760501"
 TMPL_CARD_NUMBER = "2200 **** **** 2966"
 TMPL_DOC_NUMBER = "M69938279093"
 SCOPE = "replace_cheque"
+HISTORY_SOURCE_BY_TYPE = {
+    "SBP": "M69947658350",
+    "CARD": "M69949783738",
+}
 
 
-def _normalized_type() -> str:
-    profile = get_active_profile()
-    return normalize_type(profile["data"]["type"])
+def _payment_seed(payment: dict[str, object], index: int) -> str:
+    seed = str(payment["history_new_payment_name"])
+    if index > 0:
+        seed = f"{seed}|{index}"
+    return seed
+
+
+def _default_payment_context() -> tuple[dict[str, object], int]:
+    store = get_store()
+    return store["payments"][0], 0
+
+
+def _resolve_payment_context(flow: http.HTTPFlow) -> tuple[dict[str, object], int]:
+    req_tid = _extract_tid_from_body(flow.request.content or b"")
+    if not req_tid:
+        return _default_payment_context()
+    store = get_store()
+    for idx, payment in enumerate(store["payments"]):
+        tx_type = normalize_type(payment["type"])
+        source_tid = HISTORY_SOURCE_BY_TYPE.get(tx_type)
+        if not source_tid:
+            continue
+        expected_tid = _build_seeded_id(
+            source_id=source_tid,
+            seed=_payment_seed(payment, idx),
+            digits_count=11,
+        )
+        if expected_tid == req_tid:
+            return payment, idx
+    return _default_payment_context()
+
+
+def _extract_tid_from_body(raw: bytes) -> str:
+    if not raw:
+        return ""
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return ""
+
+    def _walk(node: object) -> str:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "transactionId" and isinstance(value, str) and value.strip():
+                    return value.strip()
+                found = _walk(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for item in node:
+                found = _walk(item)
+                if found:
+                    return found
+        return ""
+
+    return _walk(payload)
 
 
 def _is_cheque_pdf_endpoint(flow: http.HTTPFlow) -> bool:
@@ -82,23 +139,19 @@ def _build_seeded_id(source_id: str, seed: str, digits_count: int) -> str:
     return f"{prefix}{numeric}"
 
 
-def _transaction_id() -> str:
-    profile = get_active_profile()
-    pdata = profile["data"]
-    source = "M69949783738" if _normalized_type() == "CARD" else "M69943705894"
+def _transaction_id(payment: dict[str, object], index: int) -> str:
+    source = "M69949783738" if normalize_type(payment["type"]) == "CARD" else "M69943705894"
     return _build_seeded_id(
         source_id=source,
-        seed=pdata["history_new_payment_name"],
+        seed=_payment_seed(payment, index),
         digits_count=11,
     )
 
 
-def _sbp_operation_id() -> str:
-    profile = get_active_profile()
-    pdata = profile["data"]
+def _sbp_operation_id(payment: dict[str, object], index: int) -> str:
     return _build_seeded_id(
         source_id="B6128112922901280G10180011760501",
-        seed=pdata["history_new_payment_name"],
+        seed=_payment_seed(payment, index),
         digits_count=31,
     )
 
@@ -126,15 +179,13 @@ def _suffix_to_tzinfo(suffix: str) -> timezone:
     return timezone(sign * timedelta(hours=hh, minutes=mi))
 
 
-def _format_cheque_datetime() -> str:
+def _format_cheque_datetime(payment: dict[str, object]) -> str:
     """На чеке всегда московские часы; дата и время переводятся из зоны конфига в МСК."""
-    profile = get_active_profile()
-    pdata = profile["data"]
-    date_raw = str(pdata["transaction_date"]).strip()
-    time_raw = str(pdata["transaction_time"]).strip()
+    date_raw = str(payment["transaction_date"]).strip()
+    time_raw = str(payment["transaction_time"]).strip()
     if not date_raw or not time_raw:
         return f"{date_raw} {time_raw} ПО МСК".strip()
-    tzinfo = _suffix_to_tzinfo(normalize_tz_suffix(pdata["transaction_time_zone"]))
+    tzinfo = _suffix_to_tzinfo(normalize_tz_suffix(payment["transaction_time_zone"]))
     parsed: datetime | None = None
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
@@ -151,9 +202,8 @@ def _format_cheque_datetime() -> str:
     return f"{msk.day:02d}.{msk.month:02d}.{msk.year} {msk.hour:02d}:{msk.minute:02d} ПО МСК"
 
 
-def _card_number() -> str:
-    profile = get_active_profile()
-    return str(profile["data"]["card_number"]).strip() or TMPL_CARD_NUMBER
+def _card_number(payment: dict[str, object]) -> str:
+    return str(payment["card_number"]).strip() or TMPL_CARD_NUMBER
 
 
 def _inject_font_overrides(html: str) -> str:
@@ -207,41 +257,39 @@ def _embed_svg_assets(html: str) -> str:
     return html
 
 
-def _template_path() -> Path | None:
-    return TEMPLATE_BY_TYPE.get(_normalized_type())
+def _template_path(payment_type: str) -> Path | None:
+    return TEMPLATE_BY_TYPE.get(normalize_type(payment_type))
 
 
-def build_cheque_html() -> str | None:
-    profile = get_active_profile()
-    pdata = profile["data"]
-    template_path = _template_path()
+def build_cheque_html(payment: dict[str, object], index: int) -> str | None:
+    template_path = _template_path(str(payment["type"]))
     if template_path is None:
-        app_logger.warning(SCOPE, "unknown payment type", payment_type=pdata["type"])
+        app_logger.warning(SCOPE, "unknown payment type", payment_type=payment["type"])
         return None
     if not template_path.exists():
         app_logger.error(SCOPE, "template missing", template_path=str(template_path))
         return None
 
-    tx_type = _normalized_type()
+    tx_type = normalize_type(payment["type"])
     html = template_path.read_text(encoding="utf-8")
-    bank_name = get_bank_meta(pdata["bank"])["name"]
+    bank_name = get_bank_meta(payment["bank"])["name"]
 
     replacements = {
-        TMPL_DATE: _format_cheque_datetime(),
-        TMPL_AMOUNT: _format_amount(pdata["history_new_payment_amount"]),
+        TMPL_DATE: _format_cheque_datetime(payment),
+        TMPL_AMOUNT: _format_amount(payment["history_new_payment_amount"]),
         TMPL_BANK: bank_name,
-        TMPL_DOC_NUMBER: _transaction_id(),
+        TMPL_DOC_NUMBER: _transaction_id(payment, index),
     }
     if tx_type == "SBP":
         replacements.update(
             {
-                TMPL_SBP_RECIPIENT: str(pdata["details_new_payment_name"]).strip().upper(),
-                TMPL_SBP_PHONE: str(pdata["sbp_telephone"]).strip(),
-                TMPL_SBP_ID: _sbp_operation_id(),
+                TMPL_SBP_RECIPIENT: str(payment["details_new_payment_name"]).strip().upper(),
+                TMPL_SBP_PHONE: str(payment["sbp_telephone"]).strip(),
+                TMPL_SBP_ID: _sbp_operation_id(payment, index),
             }
         )
     elif tx_type == "CARD":
-        replacements[TMPL_CARD_NUMBER] = _card_number()
+        replacements[TMPL_CARD_NUMBER] = _card_number(payment)
 
     for old, new in replacements.items():
         if new:
@@ -304,12 +352,12 @@ def _clear_saved_cheques_dir() -> None:
             child.unlink()
 
 
-def _build_pdf_for_flow() -> bytes | None:
+def _build_pdf_for_flow(payment: dict[str, object], index: int) -> bytes | None:
     _clear_saved_cheques_dir()
 
     base_name = "rocket-reciept"
 
-    html = build_cheque_html()
+    html = build_cheque_html(payment, index)
     if html is None:
         return None
 
@@ -347,13 +395,14 @@ def response(flow: http.HTTPFlow) -> None:
         return
 
     status = flow.response.status_code if flow.response else None
-    profile = get_active_profile()
+    payment, index = _resolve_payment_context(flow)
     app_logger.info(
         SCOPE,
         "cheque response intercepted",
         status=status,
-        payment_type=_normalized_type(),
-        active_profile=profile["id"],
+        payment_type=payment["type"],
+        payment_name=payment["history_new_payment_name"],
+        payment_index=index,
     )
     if status == 200 and _incoming_response_is_usable_pdf(flow):
         app_logger.info(SCOPE, "upstream pdf is valid, no replacement")
@@ -361,7 +410,7 @@ def response(flow: http.HTTPFlow) -> None:
     if status == 200:
         app_logger.warning(SCOPE, "upstream returned 200 but body is not usable pdf")
 
-    generated = _build_pdf_for_flow()
+    generated = _build_pdf_for_flow(payment, index)
     if generated is None:
         app_logger.warning(SCOPE, "failed to generate replacement pdf, passthrough enabled")
         return
@@ -376,6 +425,6 @@ def response(flow: http.HTTPFlow) -> None:
     app_logger.info(
         SCOPE,
         "response replaced with generated pdf",
-        transaction_id=_transaction_id(),
+        transaction_id=_transaction_id(payment, index),
         bytes=len(generated),
     )

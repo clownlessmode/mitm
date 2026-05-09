@@ -8,7 +8,7 @@ from mitmproxy import http
 
 import app_logger
 from bank_mapper import get_bank_meta
-from runtime_config import get_active_profile, get_profile_payments, normalize_type, normalize_tz_suffix
+from runtime_config import get_store, normalize_type, normalize_tz_suffix
 
 HOST_SUB = "dbo.rocketbank.ru"
 HISTORY_PATH = "/v1/history/list"
@@ -147,9 +147,8 @@ def _append_payments(data: Any) -> list[dict[str, Any]]:
 
     if ops is None:
         return []
-    profile = get_active_profile()
-    pdata = profile["data"]
-    payments = get_profile_payments(pdata)
+    store = get_store()
+    payments = list(store["payments"])
     created: list[dict[str, Any]] = []
     # Чтобы в истории был порядок как в UI (1,2,3), вставляем в обратном.
     for idx in range(len(payments) - 1, -1, -1):
@@ -183,8 +182,8 @@ def response(flow: http.HTTPFlow) -> None:
 
     flow.response.text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
-    profile = get_active_profile()
-    pdata = profile["data"]
+    store = get_store()
+    first = store["payments"][0]
     first_tid = created_ops[0].get("detailAction", {}).get("transactionId")
     last_tid = created_ops[-1].get("detailAction", {}).get("transactionId")
     app_logger.info(
@@ -195,6 +194,5 @@ def response(flow: http.HTTPFlow) -> None:
         count=len(created_ops),
         first_transaction_id=first_tid,
         last_transaction_id=last_tid,
-        operation_type=pdata["type"],
-        active_profile=profile["id"],
+        first_operation_type=first["type"],
     )

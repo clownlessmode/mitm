@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import ast
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
 import config as legacy_config
 
-CONFIG_KEYS = (
-    "last_balance",
+PAYMENT_KEYS = (
     "type",
     "history_new_payment_name",
     "history_new_payment_amount",
@@ -18,11 +19,9 @@ CONFIG_KEYS = (
     "sbp_telephone",
     "bank",
     "card_number",
-    "payments",
 )
 
-DEFAULTS: dict[str, Any] = {
-    "last_balance": 0,
+PAYMENT_DEFAULTS: dict[str, Any] = {
     "type": "SBP",
     "history_new_payment_name": "",
     "history_new_payment_amount": 0,
@@ -33,12 +32,24 @@ DEFAULTS: dict[str, Any] = {
     "sbp_telephone": "",
     "bank": "UNKNOWN",
     "card_number": "",
+}
+
+STORE_DEFAULTS: dict[str, Any] = {
+    "last_balance": 0,
     "payments": [],
 }
 
 
-def _profiles_path() -> Path:
+def _store_path() -> Path:
+    return Path(__file__).resolve().parent / "payments.json"
+
+
+def _legacy_profiles_path() -> Path:
     return Path(__file__).resolve().parent / "profiles.json"
+
+
+def _legacy_config_path() -> Path:
+    return Path(__file__).resolve().parent / "config.py"
 
 
 def normalize_tz_suffix(raw: object) -> str:
@@ -70,94 +81,53 @@ def _to_int(raw: object, default: int = 0) -> int:
         return default
 
 
-def _legacy_profile_data() -> dict[str, Any]:
+def _legacy_single_payment() -> dict[str, Any]:
     return {
-        "last_balance": getattr(legacy_config, "last_balance", DEFAULTS["last_balance"]),
-        "type": getattr(legacy_config, "type", DEFAULTS["type"]),
+        "type": getattr(legacy_config, "type", PAYMENT_DEFAULTS["type"]),
         "history_new_payment_name": getattr(
-            legacy_config, "history_new_payment_name", DEFAULTS["history_new_payment_name"]
+            legacy_config, "history_new_payment_name", PAYMENT_DEFAULTS["history_new_payment_name"]
         ),
         "history_new_payment_amount": getattr(
-            legacy_config,
-            "history_new_payment_amount",
-            DEFAULTS["history_new_payment_amount"],
+            legacy_config, "history_new_payment_amount", PAYMENT_DEFAULTS["history_new_payment_amount"]
         ),
         "details_new_payment_name": getattr(
-            legacy_config,
-            "details_new_payment_name",
-            DEFAULTS["details_new_payment_name"],
+            legacy_config, "details_new_payment_name", PAYMENT_DEFAULTS["details_new_payment_name"]
         ),
-        "transaction_date": getattr(legacy_config, "transaction_date", DEFAULTS["transaction_date"]),
-        "transaction_time": getattr(legacy_config, "transaction_time", DEFAULTS["transaction_time"]),
+        "transaction_date": getattr(legacy_config, "transaction_date", PAYMENT_DEFAULTS["transaction_date"]),
+        "transaction_time": getattr(legacy_config, "transaction_time", PAYMENT_DEFAULTS["transaction_time"]),
         "transaction_time_zone": getattr(
-            legacy_config,
-            "transaction_time_zone",
-            DEFAULTS["transaction_time_zone"],
+            legacy_config, "transaction_time_zone", PAYMENT_DEFAULTS["transaction_time_zone"]
         ),
-        "sbp_telephone": getattr(legacy_config, "sbp_telephone", DEFAULTS["sbp_telephone"]),
-        "bank": getattr(legacy_config, "bank", DEFAULTS["bank"]),
-        "card_number": getattr(legacy_config, "card_number", DEFAULTS["card_number"]),
+        "sbp_telephone": getattr(legacy_config, "sbp_telephone", PAYMENT_DEFAULTS["sbp_telephone"]),
+        "bank": getattr(legacy_config, "bank", PAYMENT_DEFAULTS["bank"]),
+        "card_number": getattr(legacy_config, "card_number", PAYMENT_DEFAULTS["card_number"]),
     }
 
 
-def sanitize_profile_data(raw: dict[str, Any]) -> dict[str, Any]:
-    data = dict(DEFAULTS)
-    for key in CONFIG_KEYS:
+def sanitize_payment(raw: dict[str, Any], fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = dict(PAYMENT_DEFAULTS)
+    if fallback:
+        for key in PAYMENT_KEYS:
+            if key in fallback:
+                base[key] = fallback[key]
+    for key in PAYMENT_KEYS:
         if key in raw:
-            data[key] = raw[key]
-    data["last_balance"] = _to_int(data["last_balance"], 0)
-    data["history_new_payment_amount"] = _to_int(data["history_new_payment_amount"], 0)
-    data["type"] = normalize_type(data["type"])
-    data["transaction_time_zone"] = normalize_tz_suffix(data["transaction_time_zone"])
-    data["history_new_payment_name"] = str(data["history_new_payment_name"]).strip()
-    data["details_new_payment_name"] = str(data["details_new_payment_name"]).strip()
-    data["transaction_date"] = str(data["transaction_date"]).strip()
-    data["transaction_time"] = str(data["transaction_time"]).strip()
-    data["sbp_telephone"] = str(data["sbp_telephone"]).strip()
-    data["bank"] = str(data["bank"]).strip().upper() or "UNKNOWN"
-    data["card_number"] = str(data["card_number"]).strip()
-    data["payments"] = sanitize_payments(raw.get("payments"), fallback=data)
-    if data["payments"]:
-        first = data["payments"][0]
-        data["type"] = first["type"]
-        data["history_new_payment_name"] = first["history_new_payment_name"]
-        data["history_new_payment_amount"] = first["history_new_payment_amount"]
-        data["details_new_payment_name"] = first["details_new_payment_name"]
-        data["transaction_date"] = first["transaction_date"]
-        data["transaction_time"] = first["transaction_time"]
-        data["transaction_time_zone"] = first["transaction_time_zone"]
-        data["sbp_telephone"] = first["sbp_telephone"]
-        data["bank"] = first["bank"]
-        data["card_number"] = first["card_number"]
-    return data
-
-
-def sanitize_payment(raw: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
-    name = str(raw.get("history_new_payment_name", fallback["history_new_payment_name"])).strip()
-    details_name = str(raw.get("details_new_payment_name", fallback["details_new_payment_name"])).strip()
-    amount = _to_int(raw.get("history_new_payment_amount", fallback["history_new_payment_amount"]), 0)
-    tx_type = normalize_type(raw.get("type", fallback["type"]))
-    tx_date = str(raw.get("transaction_date", fallback["transaction_date"])).strip()
-    tx_time = str(raw.get("transaction_time", fallback["transaction_time"])).strip()
-    tx_tz = normalize_tz_suffix(raw.get("transaction_time_zone", fallback["transaction_time_zone"]))
-    sbp_phone = str(raw.get("sbp_telephone", fallback["sbp_telephone"])).strip()
-    bank = str(raw.get("bank", fallback["bank"])).strip().upper() or "UNKNOWN"
-    card_number = str(raw.get("card_number", fallback["card_number"])).strip()
+            base[key] = raw[key]
     return {
-        "type": tx_type,
-        "history_new_payment_name": name,
-        "history_new_payment_amount": amount,
-        "details_new_payment_name": details_name,
-        "transaction_date": tx_date,
-        "transaction_time": tx_time,
-        "transaction_time_zone": tx_tz,
-        "sbp_telephone": sbp_phone,
-        "bank": bank,
-        "card_number": card_number,
+        "type": normalize_type(base["type"]),
+        "history_new_payment_name": str(base["history_new_payment_name"]).strip(),
+        "history_new_payment_amount": _to_int(base["history_new_payment_amount"], 0),
+        "details_new_payment_name": str(base["details_new_payment_name"]).strip(),
+        "transaction_date": str(base["transaction_date"]).strip(),
+        "transaction_time": str(base["transaction_time"]).strip(),
+        "transaction_time_zone": normalize_tz_suffix(base["transaction_time_zone"]),
+        "sbp_telephone": str(base["sbp_telephone"]).strip(),
+        "bank": str(base["bank"]).strip().upper() or "UNKNOWN",
+        "card_number": str(base["card_number"]).strip(),
     }
 
 
-def sanitize_payments(raw: Any, fallback: dict[str, Any]) -> list[dict[str, Any]]:
+def sanitize_payments(raw: Any, fallback: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
     out: list[dict[str, Any]] = []
@@ -168,78 +138,124 @@ def sanitize_payments(raw: Any, fallback: dict[str, Any]) -> list[dict[str, Any]
     return out
 
 
-def get_profile_payments(profile_data: dict[str, Any]) -> list[dict[str, Any]]:
-    payments = sanitize_payments(profile_data.get("payments"), fallback=profile_data)
-    if payments:
-        return payments
-    return [sanitize_payment({}, fallback=profile_data)]
+def _migrate_legacy_profiles_if_present() -> dict[str, Any] | None:
+    path = _legacy_profiles_path()
+    if not path.exists():
+        return None
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(loaded, dict):
+        return None
+    profiles = loaded.get("profiles")
+    active_profile_id = str(loaded.get("active_profile_id") or "")
+    if not isinstance(profiles, list) or not profiles:
+        return None
+    active = None
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        if str(profile.get("id") or "") == active_profile_id:
+            active = profile
+            break
+    if active is None:
+        active = profiles[0] if isinstance(profiles[0], dict) else None
+    if active is None:
+        return None
+    raw_data = active.get("data")
+    if not isinstance(raw_data, dict):
+        raw_data = {}
+    last_balance = _to_int(raw_data.get("last_balance", STORE_DEFAULTS["last_balance"]), 0)
+    payments = sanitize_payments(raw_data.get("payments"), fallback=raw_data)
+    if not payments:
+        payments = [sanitize_payment(raw_data)]
+    return {"last_balance": last_balance, "payments": payments}
+
+
+def sanitize_store(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raw = {}
+    last_balance = _to_int(raw.get("last_balance", STORE_DEFAULTS["last_balance"]), 0)
+    payments = sanitize_payments(raw.get("payments"))
+    if not payments:
+        payments = [sanitize_payment(_legacy_single_payment())]
+    return {"last_balance": last_balance, "payments": payments}
 
 
 def ensure_store() -> dict[str, Any]:
-    path = _profiles_path()
+    path = _store_path()
+    loaded: Any = {}
     if path.exists():
         try:
             loaded = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             loaded = {}
     else:
-        loaded = {}
-
-    profiles = loaded.get("profiles")
-    active_profile_id = loaded.get("active_profile_id")
-
-    if not isinstance(profiles, list) or not profiles:
-        profiles = [
-            {
-                "id": "default",
-                "title": "Default",
-                "data": sanitize_profile_data(_legacy_profile_data()),
+        migrated = _migrate_legacy_profiles_if_present()
+        if migrated is not None:
+            loaded = migrated
+        else:
+            loaded = {
+                "last_balance": getattr(legacy_config, "last_balance", STORE_DEFAULTS["last_balance"]),
+                "payments": [sanitize_payment(_legacy_single_payment())],
             }
-        ]
-        active_profile_id = "default"
-        save_store({"active_profile_id": active_profile_id, "profiles": profiles})
-        return {"active_profile_id": active_profile_id, "profiles": profiles}
-
-    normalized_profiles: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for idx, profile in enumerate(profiles):
-        if not isinstance(profile, dict):
-            continue
-        pid = str(profile.get("id") or "").strip() or f"profile-{idx + 1}"
-        if pid in seen:
-            pid = f"{pid}-{idx + 1}"
-        seen.add(pid)
-        title = str(profile.get("title") or pid).strip() or pid
-        pdata_raw = profile.get("data")
-        pdata = sanitize_profile_data(pdata_raw if isinstance(pdata_raw, dict) else {})
-        normalized_profiles.append({"id": pid, "title": title, "data": pdata})
-
-    if not normalized_profiles:
-        normalized_profiles = [
-            {"id": "default", "title": "Default", "data": sanitize_profile_data(_legacy_profile_data())}
-        ]
-        active_profile_id = "default"
-
-    ids = {p["id"] for p in normalized_profiles}
-    if active_profile_id not in ids:
-        active_profile_id = normalized_profiles[0]["id"]
-
-    result = {"active_profile_id": active_profile_id, "profiles": normalized_profiles}
-    save_store(result)
-    return result
+    store = sanitize_store(loaded)
+    save_store(store)
+    return store
 
 
 def save_store(store: dict[str, Any]) -> None:
-    path = _profiles_path()
-    text = json.dumps(store, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    path.write_text(text, encoding="utf-8")
+    normalized = sanitize_store(store)
+    text = json.dumps(normalized, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    _store_path().write_text(text, encoding="utf-8")
 
 
-def get_active_profile() -> dict[str, Any]:
-    store = ensure_store()
-    active_profile_id = str(store.get("active_profile_id") or "")
-    for profile in store["profiles"]:
-        if profile["id"] == active_profile_id:
-            return profile
-    return store["profiles"][0]
+def get_store() -> dict[str, Any]:
+    return ensure_store()
+
+
+def get_payments() -> list[dict[str, Any]]:
+    return get_store()["payments"]
+
+
+def write_legacy_config_from_store(store: dict[str, Any]) -> None:
+    normalized = sanitize_store(store)
+    last_balance = int(normalized["last_balance"])
+    first = normalized["payments"][0]
+    text = f"""# Central settings for rocket_last scripts.
+# This file is auto-synced from payments.json.
+last_balance = {last_balance}
+type = {first["type"]!r}
+
+history_new_payment_name = {first["history_new_payment_name"]!r}
+history_new_payment_amount = {int(first["history_new_payment_amount"])}
+details_new_payment_name = {first["details_new_payment_name"]!r}
+
+transaction_date = {first["transaction_date"]!r}
+transaction_time = {first["transaction_time"]!r}
+transaction_time_zone = {first["transaction_time_zone"]!r}
+
+sbp_telephone = {first["sbp_telephone"]!r}
+bank = {first["bank"]!r}
+card_number = {first["card_number"]!r}
+
+
+def transaction_tz_suffix() -> str:
+    raw = str(transaction_time_zone).strip()
+    if not raw:
+        return "+0000"
+    u = raw.upper()
+    if u in ("Z", "UTC"):
+        return "+0000"
+    compact = raw.replace(":", "")
+    if len(compact) == 5 and compact[0] in "+-" and compact[1:].isdigit():
+        return compact
+    return "+0000"
+"""
+    ast.parse(text)
+    cfg = _legacy_config_path()
+    if cfg.exists():
+        shutil.copy2(cfg, cfg.with_suffix(".py.bak"))
+    cfg.write_text(text, encoding="utf-8")
 
