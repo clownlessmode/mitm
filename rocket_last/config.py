@@ -1,23 +1,23 @@
 # Центральные настройки для скриптов rocket_last.
 # Меняйте значения здесь — они подтянутся в подключённых файлах.
-last_balance = 9243452350
-type = "CARD"  # SBP / CARD
+last_balance = 5000
+type = "SBP"  # SBP / CARD
 
 # Настройки для добавления новой операции в историю.
-history_new_payment_name = "5206" # 2966 или "Ильсур Г."
-history_new_payment_amount = 1000000
+history_new_payment_name = "Денис Н." # 2966 или "Ильсур Г."
+history_new_payment_amount = 675294
 
-details_new_payment_name = "РОДИОН ВИТАЛЬЕВИЧ К" # 2966 или "ИВАН ИВАНОВ И"
+details_new_payment_name = "ДЕНИС АЛЕКСЕЕВИЧ Н" # 2966 или "ИВАН ИВАНОВ И"
 
 transaction_date = "2026-05-09"
-transaction_time = "18:55:03"
+transaction_time = "19:44:03"
 # Сдвиг для поля transactionDateTime в API (как в ответах: +0300, +0000).
 # Укажите ту же зону, в которой вы задаёте дату/время выше (Москва → +0300).
 transaction_time_zone = "+0700"
 
-sbp_telephone = "+7 960 917-71-31"
+sbp_telephone = "+7 900 108-32-49"
 
-bank = "SBERBANK" # VTB / SBERBANK / TBANK / OZON / UNKNOWN / WB / ALPHA / SOVKOM / DALNEVOSTOCHNIY / RAIFAIZEN / 
+bank = "TBANK" # VTB / SBERBANK / TBANK / OZON / UNKNOWN / WB / ALPHA / SOVKOM / DALNEVOSTOCHNIY / RAIFAIZEN / 
 
 card_number = "2200 **** **** 5206"
 
