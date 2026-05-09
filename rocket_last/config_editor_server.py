@@ -34,6 +34,19 @@ PAYMENT_FIELDS = (
     ("card_number", "Маска карты", "text", "2200 **** **** 5206"),
 )
 
+BANK_OPTIONS = [
+    "TBANK",
+    "SBERBANK",
+    "VTB",
+    "OZON",
+    "UNKNOWN",
+    "WB",
+    "ALPHA",
+    "SOVKOM",
+    "DALNEVOSTOCHNIY",
+    "RAIFAIZEN",
+]
+
 STYLE = """
 body { font-family: Inter, Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1d2733; }
 .wrap { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
@@ -53,6 +66,7 @@ body { font-family: Inter, Arial, sans-serif; margin: 0; background: #f4f6f8; co
 .field { display: flex; flex-direction: column; gap: 6px; }
 label { font-size: 13px; color: #4a5a6a; }
 input { border: 1px solid #d6dee6; border-radius: 8px; padding: 10px; font-size: 14px; }
+select { border: 1px solid #d6dee6; border-radius: 8px; padding: 10px; font-size: 14px; background: white; }
 .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .note { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; }
 .note.ok { background: #e7f8ee; color: #15653f; }
@@ -122,14 +136,34 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
     fields_html: list[str] = []
     for key, label, input_type, placeholder in PAYMENT_FIELDS:
         value = selected.get(key, "")
-        fields_html.append(
-            f"""
-            <div class="field">
-              <label for="{key}">{esc(label)}</label>
-              <input id="{key}" name="{key}" type="{input_type}" value="{esc(value)}" placeholder="{esc(placeholder)}"/>
-            </div>
-            """
-        )
+        if key == "bank":
+            options = []
+            current = str(value).strip().upper()
+            known = set(BANK_OPTIONS)
+            for bank_name in BANK_OPTIONS:
+                sel = " selected" if bank_name == current else ""
+                options.append(f'<option value="{esc(bank_name)}"{sel}>{esc(bank_name)}</option>')
+            if current and current not in known:
+                options.append(f'<option value="{esc(current)}" selected>{esc(current)}</option>')
+            fields_html.append(
+                f"""
+                <div class="field">
+                  <label for="{key}">{esc(label)}</label>
+                  <select id="{key}" name="{key}">
+                    {"".join(options)}
+                  </select>
+                </div>
+                """
+            )
+        else:
+            fields_html.append(
+                f"""
+                <div class="field">
+                  <label for="{key}">{esc(label)}</label>
+                  <input id="{key}" name="{key}" type="{input_type}" value="{esc(value)}" placeholder="{esc(placeholder)}"/>
+                </div>
+                """
+            )
 
     return f"""<!DOCTYPE html>
 <html lang="ru">

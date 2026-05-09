@@ -23,19 +23,19 @@ PAYMENT_KEYS = (
 
 PAYMENT_DEFAULTS: dict[str, Any] = {
     "type": "SBP",
-    "history_new_payment_name": "",
-    "history_new_payment_amount": 0,
-    "details_new_payment_name": "",
-    "transaction_date": "",
-    "transaction_time": "",
-    "transaction_time_zone": "+0000",
-    "sbp_telephone": "",
-    "bank": "UNKNOWN",
-    "card_number": "",
+    "history_new_payment_name": "Денис Н.",
+    "history_new_payment_amount": 100,
+    "details_new_payment_name": "ДЕНИСКА АЛЕКСЕЕВИЧ Н",
+    "transaction_date": "2026-05-09",
+    "transaction_time": "19:44:03",
+    "transaction_time_zone": "+0700",
+    "sbp_telephone": "+7 900 108-32-49",
+    "bank": "TBANK",
+    "card_number": "2200 **** **** 5206",
 }
 
 STORE_DEFAULTS: dict[str, Any] = {
-    "last_balance": 0,
+    "last_balance": 30000,
     "payments": [],
 }
 
