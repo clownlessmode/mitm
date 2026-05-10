@@ -1,0 +1,74 @@
+{
+    "mainIcon": {
+        "iconCode": "cash_ATM"
+    },
+    "operationName": "Снятие наличных",
+    "repeatableInfo": {
+        "operationId": "11550155671",
+        "repeatableType": "CARD",
+        "repeatable": true
+    },
+    "returnableInfo": {
+        "isReturnable": false
+    },
+    "mainAmount": {
+        "amount": 8000,
+        "currencySymbol": "₽",
+        "direction": "OUTGOING"
+    },
+    "operationStatus": {
+        "status": "ENTRIED"
+    },
+    "operationFields": [
+        {
+            "title": "Статус платежа",
+            "value": "Выполнена",
+            "icon": {
+                "iconCode": "statusicon_done"
+            },
+            "key": "operationStatus"
+        },
+        {
+            "title": "Дата и время",
+            "value": "02 мая, 04:08",
+            "key": "operationTime"
+        },
+        {
+            "title": "Категория",
+            "value": "Наличные",
+            "key": "category",
+            "isChangeAvailable": true
+        },
+        {
+            "title": "Счёт",
+            "value": "Мой счёт",
+            "key": "sourceProductName"
+        }
+    ],
+    "balance": {
+        "before": {
+            "amount": 10000,
+            "currencySymbol": "₽"
+        },
+        "after": {
+            "amount": 2000,
+            "currencySymbol": "₽"
+        },
+        "separator": "→"
+    },
+    "cheque": {
+        "allowed": true,
+        "productType": "CARD",
+        "productId": "13856641038",
+        "transactionId": "T11550155671"
+    },
+    "categoryChange": {
+        "categoryCode": "CAT_CASH",
+        "operationId": "11550155671"
+    },
+    "template": {
+        "isAllowed": true,
+        "originalOperationUuid": "c5cc9cf1-0f9b-4ae1-b9fa-498c6b80d49e",
+        "operationType": "CARD"
+    }
+}

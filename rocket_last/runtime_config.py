@@ -71,7 +71,7 @@ def normalize_type(raw: object) -> str:
     value = str(raw).strip().upper()
     if value == "SPB":
         return "SBP"
-    if value not in ("SBP", "CARD"):
+    if value not in ("SBP", "CARD", "NALIK"):
         return "SBP"
     return value
 

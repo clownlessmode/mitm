@@ -39,6 +39,7 @@ SCOPE = "replace_cheque"
 HISTORY_SOURCE_BY_TYPE = {
     "SBP": "M69947658350",
     "CARD": "M69949783738",
+    "NALIK": "T11550155671",
 }
 PREBUILT_DIR = OUTPUT_DIR / "prebuilt"
 _PDF_CACHE: dict[int, tuple[str, bytes]] = {}
@@ -180,7 +181,13 @@ def _build_seeded_id(source_id: str, seed: str, digits_count: int) -> str:
 
 
 def _transaction_id(payment: dict[str, object], index: int) -> str:
-    source = "M69949783738" if normalize_type(payment["type"]) == "CARD" else "M69943705894"
+    tx = normalize_type(payment["type"])
+    if tx == "CARD":
+        source = "M69949783738"
+    elif tx == "NALIK":
+        source = "T11550155671"
+    else:
+        source = "M69943705894"
     return _build_seeded_id(
         source_id=source,
         seed=_payment_seed(payment, index),

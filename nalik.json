@@ -1,0 +1,19 @@
+{
+    "mainIcon": {
+        "icon": "cash_ATM"
+    },
+    "transactionDateTime": "2026-05-02T04:08:52+0000",
+    "operationName": "Снятие наличных",
+    "operationType": "D_CASH_ATM",
+    "mainAmount": {
+        "amount": 8000,
+        "currency": "810",
+        "direction": "OUTGOING"
+    },
+    "detailAction": {
+        "transactionId": "T11550155671",
+        "productType": "CARD",
+        "source": "RBS",
+        "productId": "13856641038"
+    }
+}

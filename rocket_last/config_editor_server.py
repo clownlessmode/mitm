@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import runtime_config
 
 PAYMENT_FIELDS = (
-    ("type", "Тип платежа (SBP/CARD)", "text", "SBP"),
+    ("type", "Тип платежа (SBP/CARD/NALIK)", "text", "SBP"),
     ("history_new_payment_name", "Имя в истории", "text", "Денис Н."),
     ("history_new_payment_amount", "Сумма платежа", "number", "1000"),
     ("direction", "Направление суммы", "select", ""),

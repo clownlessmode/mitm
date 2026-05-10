@@ -16,6 +16,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_BY_TYPE = {
     "SBP": "to_sbp.json",
     "CARD": "to_card.json",
+    "NALIK": "nalik.json",
 }
 SCOPE = "add_to_history"
 
@@ -58,6 +59,12 @@ def _datetime_for_payment(payment: dict[str, Any]) -> str:
     if date_part and time_part:
         return f"{date_part}T{time_part}{normalize_tz_suffix(payment['transaction_time_zone'])}"
     return _now_iso_utc()
+
+
+def _nalik_operation_title(payment: dict[str, Any]) -> str:
+    if normalize_direction(payment.get("direction")) == "INCOMING":
+        return "Внесение наличных"
+    return "Снятие наличных"
 
 
 def _build_operation_name(payment: dict[str, Any]) -> str:
@@ -106,7 +113,12 @@ def _build_operation(payment: dict[str, Any], index: int) -> dict[str, Any] | No
         return None
 
     new_op["transactionDateTime"] = _datetime_for_payment(payment)
-    new_op["operationName"] = _build_operation_name(payment)
+    if tx_type == "NALIK":
+        new_op["operationName"] = _nalik_operation_title(payment)
+        main_icon = _set_if_dict(new_op, "mainIcon")
+        main_icon["icon"] = "cash_ATM"
+    else:
+        new_op["operationName"] = _build_operation_name(payment)
 
     main_amount = _set_if_dict(new_op, "mainAmount")
     main_amount["amount"] = int(payment["history_new_payment_amount"])
@@ -116,9 +128,10 @@ def _build_operation(payment: dict[str, Any], index: int) -> dict[str, Any] | No
         main_icon = _set_if_dict(new_op, "mainIcon")
         main_icon["iconLiter"] = _build_icon_liter(payment)
 
-    bank_meta = get_bank_meta(payment["bank"])
-    status_icon = _set_if_dict(new_op, "statusIcon")
-    status_icon["iconUrl"] = bank_meta["icon_url"]
+    if tx_type != "NALIK":
+        bank_meta = get_bank_meta(payment["bank"])
+        status_icon = _set_if_dict(new_op, "statusIcon")
+        status_icon["iconUrl"] = bank_meta["icon_url"]
 
     detail_action = _set_if_dict(new_op, "detailAction")
     source_tid = str(detail_action.get("transactionId") or "")

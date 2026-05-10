@@ -15,10 +15,12 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_BY_TYPE = {
     "SBP": "details_sbp.json",
     "CARD": "details_card.json",
+    "NALIK": "details_nalik.json",
 }
 HISTORY_SOURCE_BY_TYPE = {
     "SBP": "M69947658350",
     "CARD": "M69949783738",
+    "NALIK": "T11550155671",
 }
 SCOPE = "replace_details"
 
@@ -161,6 +163,12 @@ def _patch_template(template: dict[str, Any], payment: dict[str, Any], index: in
 
     if tx_type == "SBP":
         operation_name = str(payment["details_new_payment_name"]).strip()
+    elif tx_type == "NALIK":
+        operation_name = (
+            "Внесение наличных"
+            if normalize_direction(payment.get("direction")) == "INCOMING"
+            else "Снятие наличных"
+        )
     else:
         operation_name = f"На карту {str(payment['history_new_payment_name']).strip()}".strip()
 
@@ -185,7 +193,10 @@ def _patch_template(template: dict[str, Any], payment: dict[str, Any], index: in
     main_amount["amount"] = amount
     main_amount["direction"] = direction
 
-    if tx_type == "SBP":
+    if tx_type == "NALIK":
+        main_icon = _set_if_dict(template, "mainIcon")
+        main_icon["iconCode"] = "cash_ATM"
+    elif tx_type == "SBP":
         main_icon = _set_if_dict(template, "mainIcon")
         payer_name = str(payment["history_new_payment_name"]).strip()
         main_icon["iconLiter"] = payer_name[:1].upper() if payer_name else ""
