@@ -55,6 +55,10 @@ _BANK_MAP: dict[str, BankMeta] = {
         "name": "БАНК ГПБ (АО)",
         "icon_url": "https://cdn.lifetechx.ru/icons/banks/icon_square/gazprombank_square.png",
     },
+    "AKBARS": {
+        "name": "ПАО \"АК БАРС\" БАНК",
+        "icon_url": "https://cdn.lifetechx.ru/icons/banks/icon_square/akbars_square.png",
+    }
     "UNKNOWN": {
         "name": "ДРУГОЙ БАНК",
         "icon_url": "https://cdn.lifetechx.ru/icons/banks/icon_square/unknown_square.png",
