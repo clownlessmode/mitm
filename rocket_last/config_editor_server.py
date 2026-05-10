@@ -25,6 +25,7 @@ PAYMENT_FIELDS = (
     ("type", "Тип платежа (SBP/CARD)", "text", "SBP"),
     ("history_new_payment_name", "Имя в истории", "text", "Денис Н."),
     ("history_new_payment_amount", "Сумма платежа", "number", "1000"),
+    ("direction", "Направление суммы", "select", ""),
     ("details_new_payment_name", "Имя в деталях", "text", "ДЕНИС Н."),
     ("transaction_date", "Дата (YYYY-MM-DD)", "text", "2026-05-09"),
     ("transaction_time", "Время (HH:MM:SS)", "text", "19:44:03"),
@@ -32,6 +33,11 @@ PAYMENT_FIELDS = (
     ("sbp_telephone", "Телефон SBP", "text", "+7 900 000-00-00"),
     ("bank", "Банк (TBANK/SBERBANK/...)", "text", "TBANK"),
     ("card_number", "Маска карты", "text", "2200 **** **** 5206"),
+)
+
+DIRECTION_OPTIONS = (
+    ("OUTGOING", "Списание (−)"),
+    ("INCOMING", "Зачисление (+)"),
 )
 
 BANK_OPTIONS = [
@@ -145,6 +151,22 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
                 options.append(f'<option value="{esc(bank_name)}"{sel}>{esc(bank_name)}</option>')
             if current and current not in known:
                 options.append(f'<option value="{esc(current)}" selected>{esc(current)}</option>')
+            fields_html.append(
+                f"""
+                <div class="field">
+                  <label for="{key}">{esc(label)}</label>
+                  <select id="{key}" name="{key}">
+                    {"".join(options)}
+                  </select>
+                </div>
+                """
+            )
+        elif key == "direction":
+            current = str(value).strip().upper()
+            options = []
+            for code, title in DIRECTION_OPTIONS:
+                sel = " selected" if code == current else ""
+                options.append(f'<option value="{esc(code)}"{sel}>{esc(title)}</option>')
             fields_html.append(
                 f"""
                 <div class="field">
@@ -325,6 +347,7 @@ class Handler(BaseHTTPRequestHandler):
             "type": _first(form, "type"),
             "history_new_payment_name": _first(form, "history_new_payment_name"),
             "history_new_payment_amount": _first(form, "history_new_payment_amount"),
+            "direction": _first(form, "direction"),
             "details_new_payment_name": _first(form, "details_new_payment_name"),
             "transaction_date": _first(form, "transaction_date"),
             "transaction_time": _first(form, "transaction_time"),

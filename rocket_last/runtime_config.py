@@ -12,6 +12,7 @@ PAYMENT_KEYS = (
     "type",
     "history_new_payment_name",
     "history_new_payment_amount",
+    "direction",
     "details_new_payment_name",
     "transaction_date",
     "transaction_time",
@@ -25,6 +26,7 @@ PAYMENT_DEFAULTS: dict[str, Any] = {
     "type": "SBP",
     "history_new_payment_name": "Денис Н.",
     "history_new_payment_amount": 100,
+    "direction": "OUTGOING",
     "details_new_payment_name": "ДЕНИСКА АЛЕКСЕЕВИЧ Н",
     "transaction_date": "2026-05-09",
     "transaction_time": "19:44:03",
@@ -74,6 +76,13 @@ def normalize_type(raw: object) -> str:
     return value
 
 
+def normalize_direction(raw: object) -> str:
+    value = str(raw).strip().upper()
+    if value == "INCOMING":
+        return "INCOMING"
+    return "OUTGOING"
+
+
 def _to_int(raw: object, default: int = 0) -> int:
     try:
         return int(float(str(raw).replace(",", ".")))
@@ -90,6 +99,7 @@ def _legacy_single_payment() -> dict[str, Any]:
         "history_new_payment_amount": getattr(
             legacy_config, "history_new_payment_amount", PAYMENT_DEFAULTS["history_new_payment_amount"]
         ),
+        "direction": getattr(legacy_config, "direction", PAYMENT_DEFAULTS["direction"]),
         "details_new_payment_name": getattr(
             legacy_config, "details_new_payment_name", PAYMENT_DEFAULTS["details_new_payment_name"]
         ),
@@ -117,6 +127,7 @@ def sanitize_payment(raw: dict[str, Any], fallback: dict[str, Any] | None = None
         "type": normalize_type(base["type"]),
         "history_new_payment_name": str(base["history_new_payment_name"]).strip(),
         "history_new_payment_amount": _to_int(base["history_new_payment_amount"], 0),
+        "direction": normalize_direction(base["direction"]),
         "details_new_payment_name": str(base["details_new_payment_name"]).strip(),
         "transaction_date": str(base["transaction_date"]).strip(),
         "transaction_time": str(base["transaction_time"]).strip(),
@@ -230,6 +241,7 @@ type = {first["type"]!r}
 
 history_new_payment_name = {first["history_new_payment_name"]!r}
 history_new_payment_amount = {int(first["history_new_payment_amount"])}
+direction = {first["direction"]!r}
 details_new_payment_name = {first["details_new_payment_name"]!r}
 
 transaction_date = {first["transaction_date"]!r}

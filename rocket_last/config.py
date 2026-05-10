@@ -6,6 +6,7 @@ type = "SBP"  # SBP / CARD
 # Настройки для добавления новой операции в историю.
 history_new_payment_name = "Денис Н." # 2966 или "Ильсур Г."
 history_new_payment_amount = 675294
+direction = "OUTGOING"
 
 details_new_payment_name = "ДЕНИС АЛЕКСЕЕВИЧ Н" # 2966 или "ИВАН ИВАНОВ И"
 

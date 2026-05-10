@@ -1,0 +1,18 @@
+{
+  "last_balance": 5000,
+  "payments": [
+    {
+      "bank": "TBANK",
+      "card_number": "2200 **** **** 5206",
+      "details_new_payment_name": "ДЕНИС АЛЕКСЕЕВИЧ Н",
+      "direction": "OUTGOING",
+      "history_new_payment_amount": 675294,
+      "history_new_payment_name": "Денис Н.",
+      "sbp_telephone": "+7 900 108-32-49",
+      "transaction_date": "2026-05-09",
+      "transaction_time": "19:44:03",
+      "transaction_time_zone": "+0700",
+      "type": "SBP"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ from mitmproxy import http
 
 import app_logger
 from bank_mapper import get_bank_meta
-from runtime_config import get_store, normalize_type, normalize_tz_suffix
+from runtime_config import get_store, normalize_type, normalize_tz_suffix, normalize_direction
 
 HOST_SUB = "dbo.rocketbank.ru"
 HISTORY_PATH = "/v1/history/list"
@@ -110,6 +110,7 @@ def _build_operation(payment: dict[str, Any], index: int) -> dict[str, Any] | No
 
     main_amount = _set_if_dict(new_op, "mainAmount")
     main_amount["amount"] = int(payment["history_new_payment_amount"])
+    main_amount["direction"] = normalize_direction(payment.get("direction"))
 
     if tx_type == "SBP":
         main_icon = _set_if_dict(new_op, "mainIcon")

@@ -7,7 +7,7 @@ from mitmproxy import http
 
 import app_logger
 from bank_mapper import get_bank_meta
-from runtime_config import get_store, normalize_type, normalize_tz_suffix
+from runtime_config import get_store, normalize_type, normalize_tz_suffix, normalize_direction
 
 HOST_SUB = "dbo.rocketbank.ru"
 DETAILS_PATH = "/v1/history/transaction"
@@ -165,8 +165,14 @@ def _patch_template(template: dict[str, Any], payment: dict[str, Any], index: in
         operation_name = f"На карту {str(payment['history_new_payment_name']).strip()}".strip()
 
     amount = int(payment["history_new_payment_amount"])
-    before_amount = int(store["last_balance"]) + int(payment["history_new_payment_amount"])
-    after_amount = int(store["last_balance"])
+    direction = normalize_direction(payment.get("direction"))
+    lb = int(store["last_balance"])
+    if direction == "INCOMING":
+        before_amount = lb - amount
+        after_amount = lb
+    else:
+        before_amount = lb + amount
+        after_amount = lb
 
     template["operationName"] = operation_name
     template["transactionDateTime"] = (
@@ -177,6 +183,7 @@ def _patch_template(template: dict[str, Any], payment: dict[str, Any], index: in
 
     main_amount = _set_if_dict(template, "mainAmount")
     main_amount["amount"] = amount
+    main_amount["direction"] = direction
 
     if tx_type == "SBP":
         main_icon = _set_if_dict(template, "mainIcon")
