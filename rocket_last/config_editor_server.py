@@ -48,6 +48,7 @@ BANK_OPTIONS = [
     "UNKNOWN",
     "WB",
     "ALPHA",
+    "AKBARS",
     "SOVKOM",
     "DALNEVOSTOCHNIY",
     "RAIFAIZEN",
