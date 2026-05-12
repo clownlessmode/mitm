@@ -68,10 +68,17 @@ def _parse_transaction_datetime(value: Any) -> datetime | None:
     raw = value.strip()
     if not raw:
         return None
-    if raw.endswith("Z"):
-        raw = f"{raw[:-1]}+0000"
 
-    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+    # История в приложении визуально сортируется по написанным дате/времени.
+    # Поэтому для позиции в списке не переводим +0700/+0000 в абсолютный UTC.
+    raw = raw.replace("Z", "")
+    for sign in ("+", "-"):
+        tz_pos = raw.rfind(sign)
+        if tz_pos > len("YYYY-MM-DDT"):
+            raw = raw[:tz_pos]
+            break
+
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
         try:
             return datetime.strptime(raw, fmt)
         except ValueError:
