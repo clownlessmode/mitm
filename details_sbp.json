@@ -3,7 +3,7 @@
         "iconLiter": "А",
         "iconCode": "mcc_rashod"
     },
-    "operationName": "Азат Аликович Г",
+    "operationName": "Максим Витальевич З",
     "repeatableInfo": {
         "operationId": "69943705894",
         "repeatableType": "PHONE",
@@ -60,7 +60,7 @@
         },
         {
             "title": "Номер телефона получателя",
-            "value": "+7 909 933-40-05",
+            "value": "+7 987 543-89-57",
             "key": "phoneNumber"
         },
         {

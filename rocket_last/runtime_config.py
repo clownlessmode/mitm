@@ -33,7 +33,7 @@ PAYMENT_DEFAULTS: dict[str, Any] = {
     "transaction_time_zone": "+0700",
     "sbp_telephone": "+7 900 108-32-49",
     "bank": "TBANK",
-    "card_number": "2200 **** **** 5206",
+    "card_number": "2200 **** **** 1928",
 }
 
 STORE_DEFAULTS: dict[str, Any] = {

@@ -32,7 +32,7 @@ PAYMENT_FIELDS = (
     ("transaction_time_zone", "Часовой пояс (+0700)", "text", "+0700"),
     ("sbp_telephone", "Телефон SBP", "text", "+7 900 000-00-00"),
     ("bank", "Банк (TBANK/SBERBANK/...)", "text", "TBANK"),
-    ("card_number", "Маска карты", "text", "2200 **** **** 5206"),
+    ("card_number", "Маска карты", "text", "2200 **** **** 1928"),
 )
 
 TYPE_OPTIONS = (

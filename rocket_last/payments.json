@@ -3,7 +3,7 @@
   "payments": [
     {
       "bank": "TBANK",
-      "card_number": "2200 **** **** 5206",
+      "card_number": "2200 **** **** 1928",
       "details_new_payment_name": "ДЕНИС АЛЕКСЕЕВИЧ Н",
       "direction": "OUTGOING",
       "history_new_payment_amount": 675294,

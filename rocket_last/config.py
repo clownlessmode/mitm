@@ -20,7 +20,7 @@ sbp_telephone = "+7 900 108-32-49"
 
 bank = "TBANK" # VTB / SBERBANK / TBANK / OZON / UNKNOWN / WB / ALPHA / SOVKOM / DALNEVOSTOCHNIY / RAIFAIZEN / 
 
-card_number = "2200 **** **** 5206"
+card_number = "2200 **** **** 1928"
 
 
 def transaction_tz_suffix() -> str:

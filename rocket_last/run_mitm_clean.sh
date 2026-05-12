@@ -19,6 +19,12 @@ if [[ ! -f "$ADDON" ]]; then
   exit 1
 fi
 
+if ! ulimit -n 65535 2>/dev/null; then
+  echo "⚠️  Не удалось поднять лимит открытых файлов, текущий: $(ulimit -n)"
+else
+  echo "✅ Лимит открытых файлов: $(ulimit -n)"
+fi
+
 echo "🔎 Ищу старые mitmweb процессы для rocket_last/main.py..."
 
 PIDS="$(pgrep -f "mitmweb.*-s .*rocket_last/main.py" || true)"
