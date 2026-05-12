@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import runtime_config
 
 PAYMENT_FIELDS = (
-    ("type", "Тип платежа (SBP/CARD/NALIK)", "text", "SBP"),
+    ("type", "Вид операции", "select", "SBP"),
     ("history_new_payment_name", "Имя в истории", "text", "Денис Н."),
     ("history_new_payment_amount", "Сумма платежа", "number", "1000"),
     ("direction", "Направление суммы", "select", ""),
@@ -35,10 +35,29 @@ PAYMENT_FIELDS = (
     ("card_number", "Маска карты", "text", "2200 **** **** 5206"),
 )
 
+TYPE_OPTIONS = (
+    ("SBP", "СБП"),
+    ("CARD", "На карту"),
+    ("NALIK", "Наличные"),
+)
+
 DIRECTION_OPTIONS = (
     ("OUTGOING", "Списание (−)"),
     ("INCOMING", "Зачисление (+)"),
 )
+
+FIELD_VISIBLE_FOR = {
+    "history_new_payment_name": ("SBP", "CARD"),
+    "history_new_payment_amount": ("SBP", "CARD", "NALIK"),
+    "direction": ("SBP", "CARD", "NALIK"),
+    "details_new_payment_name": ("SBP",),
+    "transaction_date": ("SBP", "CARD", "NALIK"),
+    "transaction_time": ("SBP", "CARD", "NALIK"),
+    "transaction_time_zone": ("SBP", "CARD", "NALIK"),
+    "sbp_telephone": ("SBP",),
+    "bank": ("SBP", "CARD"),
+    "card_number": ("CARD",),
+}
 
 BANK_OPTIONS = [
     "TBANK",
@@ -71,6 +90,7 @@ body { font-family: Inter, Arial, sans-serif; margin: 0; background: #f4f6f8; co
 .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 6px 24px rgba(18, 38, 63, 0.08); }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px 16px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field.hidden { display: none; }
 label { font-size: 13px; color: #4a5a6a; }
 input { border: 1px solid #d6dee6; border-radius: 8px; padding: 10px; font-size: 14px; }
 select { border: 1px solid #d6dee6; border-radius: 8px; padding: 10px; font-size: 14px; background: white; }
@@ -143,6 +163,10 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
     fields_html: list[str] = []
     for key, label, input_type, placeholder in PAYMENT_FIELDS:
         value = selected.get(key, "")
+        visible_for = FIELD_VISIBLE_FOR.get(key)
+        data_attrs = ""
+        if visible_for is not None:
+            data_attrs = f' data-visible-for="{esc(" ".join(visible_for))}"'
         if key == "bank":
             options = []
             current = str(value).strip().upper()
@@ -154,7 +178,7 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
                 options.append(f'<option value="{esc(current)}" selected>{esc(current)}</option>')
             fields_html.append(
                 f"""
-                <div class="field">
+                <div class="field payment-field"{data_attrs}>
                   <label for="{key}">{esc(label)}</label>
                   <select id="{key}" name="{key}">
                     {"".join(options)}
@@ -170,6 +194,22 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
                 options.append(f'<option value="{esc(code)}"{sel}>{esc(title)}</option>')
             fields_html.append(
                 f"""
+                <div class="field payment-field"{data_attrs}>
+                  <label for="{key}">{esc(label)}</label>
+                  <select id="{key}" name="{key}">
+                    {"".join(options)}
+                  </select>
+                </div>
+                """
+            )
+        elif key == "type":
+            current = runtime_config.normalize_type(value)
+            options = []
+            for code, title in TYPE_OPTIONS:
+                sel = " selected" if code == current else ""
+                options.append(f'<option value="{esc(code)}"{sel}>{esc(title)}</option>')
+            fields_html.append(
+                f"""
                 <div class="field">
                   <label for="{key}">{esc(label)}</label>
                   <select id="{key}" name="{key}">
@@ -181,7 +221,7 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
         else:
             fields_html.append(
                 f"""
-                <div class="field">
+                <div class="field payment-field"{data_attrs}>
                   <label for="{key}">{esc(label)}</label>
                   <input id="{key}" name="{key}" type="{input_type}" value="{esc(value)}" placeholder="{esc(placeholder)}"/>
                 </div>
@@ -239,6 +279,23 @@ def _render_page(store: dict[str, object], edit_index: int, message: str, is_err
       </div>
     </main>
   </div>
+  <script>
+    function updatePaymentFields() {{
+      const typeSelect = document.getElementById("type");
+      const currentType = typeSelect ? typeSelect.value : "SBP";
+      document.querySelectorAll("[data-visible-for]").forEach((field) => {{
+        const allowed = (field.dataset.visibleFor || "").split(" ");
+        field.classList.toggle("hidden", !allowed.includes(currentType));
+      }});
+    }}
+    document.addEventListener("DOMContentLoaded", () => {{
+      const typeSelect = document.getElementById("type");
+      if (typeSelect) {{
+        typeSelect.addEventListener("change", updatePaymentFields);
+      }}
+      updatePaymentFields();
+    }});
+  </script>
 </body>
 </html>"""
 

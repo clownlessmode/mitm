@@ -61,6 +61,41 @@ def _datetime_for_payment(payment: dict[str, Any]) -> str:
     return _now_iso_utc()
 
 
+def _parse_transaction_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+
+    raw = value.strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = f"{raw[:-1]}+0000"
+
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _insert_operation_by_time(ops: list[Any], new_op: dict[str, Any]) -> None:
+    new_dt = _parse_transaction_datetime(new_op.get("transactionDateTime"))
+    if new_dt is None:
+        ops.insert(0, new_op)
+        return
+
+    for pos, op in enumerate(ops):
+        if not isinstance(op, dict):
+            continue
+        existing_dt = _parse_transaction_datetime(op.get("transactionDateTime"))
+        if existing_dt is not None and new_dt > existing_dt:
+            ops.insert(pos, new_op)
+            return
+
+    ops.append(new_op)
+
+
 def _nalik_operation_title(payment: dict[str, Any]) -> str:
     if normalize_direction(payment.get("direction")) == "INCOMING":
         return "Внесение наличных"
@@ -164,15 +199,12 @@ def _append_payments(data: Any) -> list[dict[str, Any]]:
     store = get_store()
     payments = list(store["payments"])
     created: list[dict[str, Any]] = []
-    # Чтобы в истории был порядок как в UI (1,2,3), вставляем в обратном.
-    for idx in range(len(payments) - 1, -1, -1):
-        payment = payments[idx]
+    for idx, payment in enumerate(payments):
         new_op = _build_operation(payment, index=idx)
         if new_op is None:
             continue
-        ops.insert(0, new_op)
+        _insert_operation_by_time(ops, new_op)
         created.append(new_op)
-    created.reverse()
     return created
 
 
