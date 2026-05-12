@@ -103,6 +103,22 @@ def _insert_operation_by_time(ops: list[Any], new_op: dict[str, Any]) -> None:
     ops.append(new_op)
 
 
+def _sort_operations_by_time(ops: list[Any]) -> None:
+    indexed_ops = list(enumerate(ops))
+
+    def sort_key(indexed_op: tuple[int, Any]) -> datetime:
+        _original_index, op = indexed_op
+        if not isinstance(op, dict):
+            return datetime.min
+        parsed = _parse_transaction_datetime(op.get("transactionDateTime"))
+        if parsed is None:
+            return datetime.min
+        return parsed
+
+    indexed_ops.sort(key=sort_key, reverse=True)
+    ops[:] = [op for _original_index, op in indexed_ops]
+
+
 def _nalik_operation_title(payment: dict[str, Any]) -> str:
     if normalize_direction(payment.get("direction")) == "INCOMING":
         return "Внесение наличных"
@@ -212,6 +228,8 @@ def _append_payments(data: Any) -> list[dict[str, Any]]:
             continue
         _insert_operation_by_time(ops, new_op)
         created.append(new_op)
+    if created:
+        _sort_operations_by_time(ops)
     return created
 
 
